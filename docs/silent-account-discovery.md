@@ -34,7 +34,9 @@ The production endpoint recognized the original service hashes (`0xc02f8216` aut
 
 **User-confirmed launch selection (2026-11-13):** Forever reached the correct account after selecting A, switching to B, and switching back to A.
 
-**Still unproven:** choice persistence after restarting the app; independent Retail/Forever choices; other regions and WoW builds; long-term authorization lifetime; whether the native and account-website catalogues intentionally differ. Native discovery is authoritative only for the handles returned by that native session, not a promise to list every historical website subscription or infer entitlement.
+**Restart acceptance (2026-11-13):** the user quit and reopened Waypoint, then launched Forever unchanged. It retained the selected licence and reached the correct account without another login.
+
+**Still unproven:** independent Retail/Forever choices; other regions and WoW builds; long-term authorization lifetime; whether the native and account-website catalogues intentionally differ. Native discovery is authoritative only for the handles returned by that native session, not a promise to list every historical website subscription or infer entitlement.
 
 Relevant primary sources for their respective implementations:
 
@@ -60,4 +62,4 @@ The branch now contains a Swift native discovery backend and an AppKit-only pick
 
 The HTTP helper compiled and ran; the browser helper compiled and ran without displaying a portal. The navigation allowlist does not restrict every ordinary page subresource; Blizzard’s pages may load their normal CDN/telemetry resources. These are experiments, not automated proof of a working discovery feature. The Swift native picker changes do not migrate credentials or saved passwords. No upstream PR has been submitted.
 
-The exact Swift backend was separately compiled and exercised against Blizzard using the saved authorization: it completed owner-verified discovery and returned a nonempty WoW catalogue without a portal. The integrated picker loaded successfully, and the user subsequently confirmed correct Forever licence selection in an A → B → A sequence. Restart persistence and independent edition choices remain pending.
+The exact Swift backend was separately compiled and exercised against Blizzard using the saved authorization: it completed owner-verified discovery and returned a nonempty WoW catalogue without a portal. The integrated picker loaded successfully, and the user subsequently confirmed correct Forever licence selection in an A → B → A sequence. Restart persistence subsequently passed: the user confirmed the correct remembered licence without another login. Independent edition choices remain pending.
