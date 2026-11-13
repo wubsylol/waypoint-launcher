@@ -141,6 +141,10 @@ final class AppModel {
     private var autoLoginStates = AutoLoginState.load() {
         didSet { AutoLoginState.save(autoLoginStates) }
     }
+    private var gameAccountChoices = GameAccountSelections.load() {
+        didSet { gameAccountChoices.save() }
+    }
+    private var isSelectingGameAccount = false
     private var profileFetches: Set<String> = []
 
     private let library = GameLibrary()
@@ -843,8 +847,8 @@ final class AppModel {
     /// Only one sign-in at a time: the login window and the hidden web view
     /// each serve a single request.
     var isSigningIn: Bool {
-        isAddingAccount || isManagingSavedLogin || phases.values.contains {
-            switch $0 { case .signingIn, .preparingWindows: true; default: false }
+        isAddingAccount || isManagingSavedLogin || isSelectingGameAccount || phases.values.contains {
+            switch $0 { case .signingIn, .preparingWindows, .launching: true; default: false }
         }
     }
 
@@ -874,8 +878,9 @@ final class AppModel {
             let mode = CGDisplayCopyDisplayMode(displayID)
             let display = mode.map { WindowsDisplay(width: $0.pixelWidth, height: $0.pixelHeight,
                                                     framesPerSecond: screen?.maximumFramesPerSecond ?? 60) }
-            let plan = try GameLauncher.plan(for: game, region: regionOverride, display: display)
+            var plan = try GameLauncher.plan(for: game, region: regionOverride, display: display)
             if plan.isWindows { phases[game.id] = .preparingWindows(nil) }
+            else { phases[game.id] = .signingIn }
             let session = try await GameLauncher.prepareWindows(plan) { [weak self] progress in
                 Task { @MainActor in
                     guard let self, case .preparingWindows = self.phases[game.id] else { return }
@@ -888,6 +893,17 @@ final class AppModel {
                 Log.notice(.auth, "sign_in_cancelled", nil, ["uid": game.id])
                 phases[game.id] = .idle
                 return
+            }
+            if plan.codename == "WoW", !plan.isWindows {
+                let owner = token.accountID
+                guard let identity = accountList[owner] else { phases[game.id] = .idle; return }
+                var choice = gameAccountChoices.choice(owner: owner, uid: game.id, region: plan.region.rawValue)
+                if choice == nil { choice = await chooseGameAccount(game, account: identity, region: plan.region) }
+                guard let choice else { phases[game.id] = .idle; return }
+                guard choice.region.caseInsensitiveCompare(plan.region.rawValue) == .orderedSame else {
+                    throw CocoaError(.validationMissingMandatoryProperty)
+                }
+                plan.gameAccount = choice.name
             }
             phases[game.id] = .launching
             if let session {
@@ -923,6 +939,33 @@ final class AppModel {
             Log.error(.launch, "failed", nil, ["uid": game.id, "error": error])
             phases[game.id] = .failed(errorMessage(error))
         }
+    }
+
+    func selectedGameAccountName(for game: Game) -> String? {
+        guard let owner = activeAccount?.id,
+              let plan = try? GameLauncher.plan(for:game,region:regionOverride) else { return nil }
+        return gameAccountChoices.choice(owner:owner,uid:game.id,region:plan.region.rawValue)?.name
+    }
+    /// Explicit selection is available even when a remembered account already exists.
+    func selectGameAccount(for game: Game) async {
+        guard canPlay(game), GameCatalog.family(for: game.install.productCode) == .worldOfWarcraft else { return }
+        isSelectingGameAccount = true
+        defer { isSelectingGameAccount = false }
+        guard let account = activeAccount else {
+            let alert = NSAlert(); alert.messageText = "Sign in to Battle.net first"
+            alert.informativeText = "Use the account menu, then choose Select account again."; alert.runModal(); return
+        }
+        do {
+            let plan = try GameLauncher.plan(for:game,region:regionOverride)
+            _ = await chooseGameAccount(game, account:account, region:plan.region)
+        } catch { phases[game.id] = .failed(errorMessage(error)) }
+    }
+    private func chooseGameAccount(_ game: Game, account: Account, region: Region) async -> GameAccountSelection? {
+        let previous = gameAccountChoices.choice(owner:account.id,uid:game.id,region:region.rawValue)
+        guard let choice = await GameAccountPicker().run(account:account,gameName:game.displayName,region:region,selected:previous) else { return nil }
+        // The caller's account/region snapshot owns this choice, not a newly selected identity.
+        gameAccountChoices.select(choice,owner:account.id,uid:game.id,region:region.rawValue)
+        return choice
     }
 
     // MARK: Accounts
@@ -1038,6 +1081,7 @@ final class AppModel {
         }
         autoLoginStates.removeValue(forKey: account.id)
         accountList.remove(account.id)
+        gameAccountChoices.remove(owner: account.id)
         tokenVault.removeAll(account: account.id)
         for codename in Set(InstallableProduct.all.map(\.codename)) {
             let options = LaunchOptions(gameKey: codename)
