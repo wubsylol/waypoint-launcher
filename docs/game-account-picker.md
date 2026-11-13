@@ -26,7 +26,7 @@ The existing startup handoff guard now reserves the signing phase before the fir
 
 Independent review covered protocol parity, owner verification, cancellation/time limits, UI cancellation and retry races. No game-content or credential migration is introduced. Both the standalone diagnostic and exact Swift backend completed owner-verified discovery against Blizzard. The integrated native picker then loaded the list in the development app without a portal or another login. The toolbar has no redundant '+'.
 
-The development app built and passed deep signature verification. The earlier external-folder startup stall was a macOS permission prompt, not evidence of a broken drive. Distinct-licence launches passed the user-confirmed A → B → A test. Remembered choice after restart also passed without another login. Independent Retail/Forever choices also passed. Failure recovery still requires live acceptance; see [acceptance-tests.md](acceptance-tests.md).
+The development app built and passed deep signature verification. The earlier external-folder startup stall was a macOS permission prompt, not evidence of a broken drive. Distinct-licence launches passed the user-confirmed A → B → A test. Remembered choice after restart also passed without another login. Independent Retail/Forever choices also passed. Cancel acceptance also passed: highlighting a different licence and cancelling preserved the saved choice on the next Forever launch. Connection-failure recovery still requires live acceptance; see [acceptance-tests.md](acceptance-tests.md).
 
 ## Live test
 
