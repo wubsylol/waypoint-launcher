@@ -284,3 +284,7 @@ Blizzard doesn't officially support launching games outside the Battle.net app. 
 - [hearthstone-linux](https://github.com/0xf4b1/hearthstone-linux): token encryption and the web login flow
 - [BnetTokenator](https://github.com/InvoxiPlayGames/BnetTokenator): the `Launch Options` layout
 - [TACTLib](https://github.com/overtools/TACTLib): the `product.db` schema
+
+## Fork investigation: game-account selection
+
+The `investigate/wow-game-account-selection` branch explores choosing individual game licences within a Battle.net identity. See [the investigation](docs/wow-game-account-selection.md) and the separate [read-only discovery probe](tools/game-account-probe). This is not yet a functional production account picker.
