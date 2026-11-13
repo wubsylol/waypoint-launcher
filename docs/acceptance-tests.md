@@ -7,8 +7,8 @@ The account-selection feature is experimental. A successful game login alone doe
 | Saved authorization | Relaunch Forever after quitting Waypoint without another login | User confirmed character selection with Battle.net and Agent stopped |
 | WoW editions | Launch Retail after closing Forever using saved authorization | User confirmed character selection |
 | Native discovery | Discover owner-verified WoW licences without a portal or second login | Python proof, exact Swift backend and integrated native picker loading passed |
-| Licence selection | Select two distinct licences and confirm each in the actual game | Not tested |
-| Selection persistence | Keep each title's explicit choice after app restart | Automated persistence coverage; real two-licence test pending |
+| Licence selection | Select two distinct licences and confirm each in the actual game | User confirmed Forever A → B → A reached the correct account each time (2026-11-13) |
+| Selection persistence | Keep each title's explicit choice after app restart | Automated persistence coverage; app-restart acceptance pending |
 | Owner isolation | Never use one Battle.net owner's licences or choice for another | Automated coverage; real second-owner test pending |
 | Background failure | Preserve an existing choice; show a useful native error for unavailable discovery | Backend implemented; failure/cancel acceptance pending |
 | Expired authorization | Offer an explicit sign-in without silently deleting unrelated game authorization | Pending refinement |

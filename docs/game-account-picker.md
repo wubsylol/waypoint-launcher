@@ -14,7 +14,7 @@ Branch: `investigate/silent-account-discovery`. No upstream PR submitted.
 
 ## Limits
 
-The new selector handoff has not yet been verified by launching two distinct real licences from this build. Prior investigation found an existing GAME_ACCOUNT matching a discovered licence name, which supports this implementation but is not a substitute for the two-account test.
+The user verified the native picker and launch handoff in Forever on 2026-11-13: selecting licence A, changing to B, and changing back to A each reached the correct account in-game. This confirms real distinct-licence selection for the tested setup; app-restart persistence and independent Retail/Forever choices still need live acceptance.
 
 Only native WoW account selection is implemented. The native backend currently supports Americas only, the region verified live. Other regions are explicitly unsupported until tested. Unrelated titles keep their original launch behavior. Discovery uses an independently implemented native TLS/protobuf exchange and may need revision if Blizzard changes its protocol. It checks for library-known open WoW clients before every attempt, including Retry. Unknown external installations cannot be guarded reliably. Saved names/IDs are local account preferences, never logged by this feature. No game data, installations or subscriptions are changed by discovery/selection itself; actual Play updates normal launch preferences.
 
@@ -26,7 +26,7 @@ The existing startup handoff guard now reserves the signing phase before the fir
 
 Independent review covered protocol parity, owner verification, cancellation/time limits, UI cancellation and retry races. No game-content or credential migration is introduced. Both the standalone diagnostic and exact Swift backend completed owner-verified discovery against Blizzard. The integrated native picker then loaded the list in the development app without a portal or another login. The toolbar has no redundant '+'.
 
-The development app built and passed deep signature verification. The earlier external-folder startup stall was a macOS permission prompt, not evidence of a broken drive. Distinct-licence launches, remembered choice after restart, and failure recovery still require live acceptance; see [acceptance-tests.md](acceptance-tests.md).
+The development app built and passed deep signature verification. The earlier external-folder startup stall was a macOS permission prompt, not evidence of a broken drive. Distinct-licence launches passed the user-confirmed A → B → A test. Remembered choice after restart, independent edition choices, and failure recovery still require live acceptance; see [acceptance-tests.md](acceptance-tests.md).
 
 ## Live test
 

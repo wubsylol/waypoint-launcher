@@ -32,7 +32,9 @@ The SSO URL’s token parameter is not proven to accept WEB_TOKEN; it could requ
 
 The production endpoint recognized the original service hashes (`0xc02f8216` authentication; `0x22dc2464` account), while service-name hashes returned `RPC_INVALID_SERVICE`. An unauthenticated links request returned `RPC_METHOD_DISABLED`; that response alone is not evidence of expired authorization. The login flow emitted queue notifications before owner-verified completion. These are `NO_RESPONSE` notifications, not interactive challenges. A diagnostic initially stopped on that unsupported callback; the completed proof handles queue updates/end within a deadline and never answers external challenges.
 
-**Still unproven:** real launch selection of two distinct licences; other regions and WoW builds; long-term authorization lifetime; whether the native and account-website catalogues intentionally differ. Native discovery is authoritative only for the handles returned by that native session, not a promise to list every historical website subscription or infer entitlement.
+**User-confirmed launch selection (2026-11-13):** Forever reached the correct account after selecting A, switching to B, and switching back to A.
+
+**Still unproven:** choice persistence after restarting the app; independent Retail/Forever choices; other regions and WoW builds; long-term authorization lifetime; whether the native and account-website catalogues intentionally differ. Native discovery is authoritative only for the handles returned by that native session, not a promise to list every historical website subscription or infer entitlement.
 
 Relevant primary sources for their respective implementations:
 
@@ -58,4 +60,4 @@ The branch now contains a Swift native discovery backend and an AppKit-only pick
 
 The HTTP helper compiled and ran; the browser helper compiled and ran without displaying a portal. The navigation allowlist does not restrict every ordinary page subresource; Blizzard’s pages may load their normal CDN/telemetry resources. These are experiments, not automated proof of a working discovery feature. The Swift native picker changes do not migrate credentials or saved passwords. No upstream PR has been submitted.
 
-The exact Swift backend was separately compiled and exercised against Blizzard using the saved authorization: it completed owner-verified discovery and returned a nonempty WoW catalogue without a portal. Native picker visual acceptance and distinct-licence launches remain pending.
+The exact Swift backend was separately compiled and exercised against Blizzard using the saved authorization: it completed owner-verified discovery and returned a nonempty WoW catalogue without a portal. The integrated picker loaded successfully, and the user subsequently confirmed correct Forever licence selection in an A → B → A sequence. Restart persistence and independent edition choices remain pending.
