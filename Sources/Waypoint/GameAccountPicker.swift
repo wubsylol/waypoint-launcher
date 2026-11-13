@@ -31,7 +31,7 @@ final class GameAccountPicker: NSObject, NSWindowDelegate {
             let identity = NSTextField(labelWithString: "\(account.displayName) · \(region.displayName)")
             identity.textColor = .secondaryLabelColor
             status.textColor = .secondaryLabelColor
-            spinner.style = .spinning; spinner.controlSize = .small
+            spinner.style = .spinning; spinner.controlSize = .small; spinner.isDisplayedWhenStopped = false
             useButton = NSButton(title: "Use account", target: self, action: #selector(choose))
             useButton.keyEquivalent = "\r"
             retryButton = NSButton(title: "Retry", target: self, action: #selector(refresh))

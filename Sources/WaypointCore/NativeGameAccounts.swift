@@ -1,14 +1,13 @@
 import Foundation
 import Network
-import WaypointCore
 
 /// Uses the saved game authorization, never website cookies or a second login.
 /// A separate normal game-service session: do not run while a WoW client is open.
 @MainActor
-final class NativeGameAccounts {
-    enum Failure: Error, LocalizedError {
+public final class NativeGameAccounts {
+    public enum Failure: Error, LocalizedError {
         case unavailable, rejected(UInt64), owner, unsupported, gameRunning
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .unavailable: "Couldn’t retrieve your WoW accounts. Check your connection and try again."
             case .rejected: "Blizzard couldn’t authorize account discovery. Your saved account selection has been kept."
@@ -19,8 +18,8 @@ final class NativeGameAccounts {
         }
     }
     private typealias W = BGSWire
-    private let connection: NWConnection
-    private var ready: CheckedContinuation<Void, Error>?
+    private let transport: any NativeAccountTransport
+    private let timeout: Duration
     private var sequence: UInt64 = 1
     private var frames = 0
     private var loggedIn = false
@@ -28,26 +27,23 @@ final class NativeGameAccounts {
     private var deadlineTask: Task<Void, Never>?
     private var closed = false
 
-    init() {
-        // System TLS validation and SNI are enabled by Network.framework.
-        connection = NWConnection(host: "us.actual.battle.net", port: 1119, using: .tls)
+    public convenience init() { self.init(transport: TLSAccountTransport()) }
+    init(transport: any NativeAccountTransport, timeout: Duration = .seconds(35)) {
+        self.transport = transport; self.timeout = timeout
     }
-    func cancel() {
-        closed = true; connection.cancel()
-        ready?.resume(throwing: CancellationError()); ready = nil
-    }
-    func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
+    public func cancel() { closed = true; transport.cancel() }
+    public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
         guard region == .us else { throw Failure.unsupported }
         guard let owner = UInt64(token.accountID), owner > 0, build > 0 else { throw Failure.owner }
         expectedOwner = owner
         deadlineTask = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(35)) } catch { return }
+            do { try await Task.sleep(for: self?.timeout ?? .seconds(35)) } catch { return }
             self?.cancel()
         }
         defer { deadlineTask?.cancel(); cancel() }
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
-            try await connect()
+            try await transport.connect()
             try await send(service: 0, method: 1, token: 0, body: W.number(3, 1))
             let (header, _) = try await receive()
             guard try W.uint(header, 1) == 254, try W.uint(header, 3) == 0,
@@ -85,34 +81,13 @@ final class NativeGameAccounts {
             return accounts.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         } onCancel: { [weak self] in Task { @MainActor in self?.cancel() } }
     }
-    private func connect() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            guard !closed else { continuation.resume(throwing: CancellationError()); return }
-            ready = continuation
-            connection.stateUpdateHandler = { [weak self] state in
-                Task { @MainActor in
-                    guard let self, let pending = self.ready else { return }
-                    switch state {
-                    case .ready: self.ready = nil; pending.resume()
-                    case .failed, .cancelled: self.ready = nil; pending.resume(throwing: Failure.unavailable)
-                    default: break
-                    }
-                }
-            }
-            connection.start(queue: .main)
-        }
-    }
     private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil) async throws {
         try Task.checkCancellation()
         guard !closed, body.count <= 1_048_576 else { throw Failure.unavailable }
         var header = W.number(1, service) + W.number(2, method) + W.number(3, token) + W.number(5, UInt64(body.count))
         if let hash { header += W.fixed32(11, hash) }
         let frame = Data([UInt8(header.count >> 8), UInt8(header.count & 255)]) + header + body
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.send(content: frame, completion: .contentProcessed { error in
-                if error != nil { continuation.resume(throwing: Failure.unavailable) } else { continuation.resume() }
-            })
-        }
+        try await transport.send(frame)
     }
     private func exact(_ count: Int) async throws -> Data {
         guard count >= 0, count <= 1_048_576 else { throw Failure.unavailable }
@@ -120,12 +95,8 @@ final class NativeGameAccounts {
         while result.count < count {
             try Task.checkCancellation()
             guard !closed else { throw Failure.unavailable }
-            let chunk: Data = try await withCheckedThrowingContinuation { continuation in
-                connection.receive(minimumIncompleteLength: 1, maximumLength: count - result.count) { data, _, _, error in
-                    guard error == nil, let data, !data.isEmpty else { continuation.resume(throwing: Failure.unavailable); return }
-                    continuation.resume(returning: data)
-                }
-            }
+            let chunk = try await transport.read(maximum: count - result.count)
+            guard !chunk.isEmpty, chunk.count <= count - result.count else { throw Failure.unavailable }
             result += chunk
         }
         return result
@@ -171,5 +142,64 @@ final class NativeGameAccounts {
         default: throw Failure.unavailable // Never answer an external challenge.
         }
         // These listener methods are NO_RESPONSE: do not send RPC acknowledgements.
+    }
+}
+
+/// Internal seam for deterministic disconnect/cancellation tests. Production
+/// always creates TLSAccountTransport with normal system trust validation.
+@MainActor
+protocol NativeAccountTransport: AnyObject {
+    func connect() async throws
+    func send(_ data: Data) async throws
+    func read(maximum: Int) async throws -> Data
+    func cancel()
+}
+
+@MainActor
+private final class TLSAccountTransport: NativeAccountTransport {
+    private let connection = NWConnection(host: "us.actual.battle.net", port: 1119, using: .tls)
+    private var ready: CheckedContinuation<Void, Error>?
+    private var closed = false
+    func cancel() {
+        closed = true; connection.cancel()
+        ready?.resume(throwing: CancellationError()); ready = nil
+    }
+    func connect() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            guard !closed else { continuation.resume(throwing: CancellationError()); return }
+            ready = continuation
+            connection.stateUpdateHandler = { [weak self] state in
+                Task { @MainActor in
+                    guard let self, let pending = self.ready else { return }
+                    switch state {
+                    case .ready: self.ready = nil; pending.resume()
+                    case .failed, .cancelled: self.ready = nil; pending.resume(throwing: NativeGameAccounts.Failure.unavailable)
+                    default: break
+                    }
+                }
+            }
+            connection.start(queue: .main)
+        }
+    }
+
+    func send(_ data: Data) async throws {
+        guard !closed else { throw CancellationError() }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            connection.send(content: data, completion: .contentProcessed { error in
+                if error != nil { continuation.resume(throwing: NativeGameAccounts.Failure.unavailable) }
+                else { continuation.resume() }
+            })
+        }
+    }
+    func read(maximum: Int) async throws -> Data {
+        guard !closed else { throw CancellationError() }
+        return try await withCheckedThrowingContinuation { continuation in
+            connection.receive(minimumIncompleteLength: 1, maximumLength: maximum) { data, _, _, error in
+                guard error == nil, let data, !data.isEmpty else {
+                    continuation.resume(throwing: NativeGameAccounts.Failure.unavailable); return
+                }
+                continuation.resume(returning: data)
+            }
+        }
     }
 }
