@@ -78,8 +78,23 @@ Use a stable development build and synthetic isolated Keychain services first. C
 
 For real sessions, record only timestamps, app/bundle version, game family, outcome and OSStatus categories. Do not dump Keychain values, cookies, callback URLs or raw web-view errors. Observe repeat launches/restarts over time before claiming a token lifetime. Verify game acceptance, not merely that a window/process started.
 
-No Waypoint diagnostics were found in the expected `~/Library/Logs/Waypoint` directory in this workspace, and no installed Waypoint bundle was located in the top-level system/personal Applications directories. Therefore the installed version and actual cached-token history behind the user's prompts were not independently verified. The user's report of prompts during game/account switching and Sign In Again supports the source-based explanation; it is not evidence for a specific expiry duration.
+Before the isolated baseline test, no Waypoint diagnostics were found in the expected `~/Library/Logs/Waypoint` directory in this workspace, and no installed Waypoint bundle was located in the top-level system/personal Applications directories. Therefore the installed version and actual cached-token history behind the user's prompts were not independently verified. The user's report of prompts during game/account switching and Sign In Again supports the source-based explanation; it is not evidence for a specific expiry duration.
 
 ## Scope of this branch
 
-Documentation and source analysis only. No production login-policy change or refresh implementation is included. No test execution is claimed for proposed behavior, and no stored credentials were accessed or changed. A targeted, tested persistence/error-handling patch should precede speculative desktop protocol work.
+Documentation, source analysis and an unmodified-login baseline test only. No production login-policy change or refresh implementation is included. No test execution is claimed for proposed behavior. The user signed in to an isolated test app, which saved its own authorization normally; existing installed-app credentials were not read, copied or changed by the investigation. A targeted, tested persistence/error-handling patch should precede speculative desktop protocol work.
+
+## Live baseline results — 2026-11-13
+
+Built the fork’s existing login behavior as an isolated app (`io.wubs.waypoint-review`, version `0.0.0-review`) with no automatic self-update feed. Its separate Keychain namespace required an initial user sign-in. The local build compiled and its nested signatures verified. Battle.net, its Agent and WoW were not found running before the test.
+
+Confirmed results:
+
+1. The user signed in and launched Forever to character selection.
+2. After the user closed Forever, the same Waypoint test app was quit and reopened. It retained the selected Battle.net identity.
+3. Forever launched without a new login window; the auth log reported source `keychain` for codename `WoW`. The user confirmed character selection.
+4. The user also closed Forever and launched mainline/Retail WoW from Waypoint successfully. Its launch log likewise used the `WoW` Keychain token.
+
+These observations confirm saved-authorization reuse across an app restart and between the tested WoW editions. They do not demonstrate token renewal, measure expiry, or test a different game-family codename or another Battle.net identity. They also do not validate the proposed login changes or the unimplemented WoW licence picker. The sign-in context was an isolated baseline build, not the user’s original installed Waypoint environment.
+
+No credential values, account labels, game-account IDs or raw authentication logs are included here. The next discriminating test is a different game family on the same identity, followed by ordinary identity switching and targeted reauthentication, distinguishing first-time authorization from unnecessary invalidation.
