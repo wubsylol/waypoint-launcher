@@ -239,8 +239,8 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
         }
         show(rows)
         // Menu items belong to one menu, so each menu gets its own.
-        let installMenuItems = { [weak self] in
-            installChoices.map { product in ActionItem(product.displayName) { self?.install(product) } }
+        let installMenuItems = { [weak self, model = self.model] in
+            installChoices.map { product in ActionItem(product.installationDisplayName(platform: model.defaultPlatform(for: product))) { self?.install(product) } }
         }
 
         // NSMenuToolbarItem shows its menu as a pull-down button does: the
@@ -383,7 +383,7 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
             }
         case .available(let product, _, let picture, let icon):
             let cell = view as? AvailableGameCell
-            cell?.configure(product, picture: picture, icon: icon)
+            cell?.configure(product, platform: model.defaultPlatform(for: product), picture: picture, icon: icon)
             cell?.install = { [weak self] in self?.install(product) }
         }
     }

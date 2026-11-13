@@ -2,9 +2,9 @@
 # Reproducible, local-only fork release. No publishing, account export or notarization.
 set -euo pipefail
 repo="${0:A:h:h}"
-label="1.2.0-wubs.1"
-version="1.2.0"
-build_number="6"
+label="1.2.1-wubs.1"
+version="1.2.1"
+build_number="7"
 destination="${DESTINATION:-$repo/dist/local/$label}"
 if [[ -n "$(git -C "$repo" status --porcelain)" ]]; then
     print -u2 "Commit source changes before building a release."
@@ -19,7 +19,7 @@ trap 'rm -rf "$staging"' EXIT
 mkdir -p "$destination" "$staging/Waypoint $label"
 app="$staging/Waypoint $label/Waypoint.app"
 VERSION="$version" BUILD_NUMBER="$build_number" BUNDLE_ID=io.wubs.waypoint-review \
-    SIGN_IDENTITY=- SPARKLE_FEED='' WINDOWS_RUNTIME=none WINDOWS_EXPERIMENTAL=0 APP_PATH="$app" \
+    SIGN_IDENTITY=- SPARKLE_FEED='' WINDOWS_RUNTIME="${WINDOWS_RUNTIME:-$repo/Resources/WindowsRuntime}" WINDOWS_EXPERIMENTAL=0 APP_PATH="$app" \
     "$repo/scripts/bundle.sh"
 # The target Mac must not need the build Mac's Xcode toolchain.
 python3 - "$app" <<'PY'
@@ -31,7 +31,7 @@ for i,line in enumerate(lines):
         path=lines[i+2].strip().removeprefix('path ').rsplit(' (offset ',1)[0]
         if path.startswith('/') and not path.startswith(('/usr/lib','/System/Library')):
             subprocess.run(['install_name_tool','-delete_rpath',path,str(binary)],check=True)
-subprocess.run(['codesign','--force','--sign','-',str(app)],check=True)
+subprocess.run(['codesign','--force','--sign','-','--preserve-metadata=entitlements',str(app)],check=True)
 subprocess.run(['codesign','--verify','--deep','--strict',str(app)],check=True)
 assert subprocess.check_output(['lipo','-archs',str(binary)],text=True).strip()=='arm64'
 PY

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "url": "https://storage.yandexcloud.net/macos-releases/waypoint/windows/Waypoint-Windows-341b9b3ee8621484f538795e60ce9a0498812e75fd85145f10ffe70a058c9a52.zip",
+  "bytes": 94624506,
+  "sha256": "341b9b3ee8621484f538795e60ce9a0498812e75fd85145f10ffe70a058c9a52",
+  "manifestSHA256": "6e73c5d76a37d655d497f70220c7c43e645e66c255b90529d33f79beacf9ab9a",
+  "sourceURL": "https://storage.yandexcloud.net/macos-releases/waypoint/windows/Waypoint-Windows-d724f342f2bbde317a02add5843bab3384b74bc00656731c1696b4c07771d5b6-sources.tar",
+  "sourceSHA256": "d724f342f2bbde317a02add5843bab3384b74bc00656731c1696b4c07771d5b6"
+}
