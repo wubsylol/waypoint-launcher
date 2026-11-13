@@ -12,32 +12,49 @@ final class Probe: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     var reading = false
     let script = """
     if (location.origin !== 'https://account.battle.net') throw new Error('origin');
+    let stage = "origin";
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 15000);
     try {
     async function identity() {
+      stage = "auth";
       const response = await fetch('/api/', {method:'POST', credentials:'include', signal:controller.signal});
-      if (!response.ok) throw new Error('auth');
+      if (!response.ok) return Promise.reject(new Error('auth'));
       const state = await response.json();
       if (!state.authenticated || state.accountId == null) throw new Error('signed out');
       if (typeof state.accountId === 'number' && !Number.isSafeInteger(state.accountId)) throw new Error('unsafe identity');
       return String(state.accountId);
     }
     const owner = await identity();
+    stage = 'catalog';
     const response = await fetch('/api/games-and-subs', {credentials:'include', signal:controller.signal});
     if (!response.ok) throw new Error('catalog');
+    stage = "schema";
     const body = await response.json();
     if (!Array.isArray(body.gameAccounts)) throw new Error('schema');
-    const accounts = body.gameAccounts.map(a => {
+    const accounts = [], diagnostics = [];
+    for (const a of body.gameAccounts) {
+      if (a == null || typeof a !== 'object' || Array.isArray(a)) {
+        diagnostics.push({product:'(malformed row)', title:'(missing title)', valid:false, shape:{}});
+        continue;
+      }
       const id = a.gameAccountUniqueId?.gameAccountId;
-      if ((typeof id === 'number' && !Number.isSafeInteger(id)) || id == null) throw new Error('unsafe game identity');
-      if (typeof a.titleId === 'number' && !Number.isSafeInteger(a.titleId)) throw new Error('unsafe title');
-      return {titleId:a.titleId, gameAccountUniqueId:{gameAccountId:String(id)},
-              gameAccountName:a.gameAccountName, gameAccountRegion:a.gameAccountRegion,
-              gameAccountStatus:a.gameAccountStatus};
-    });
+      const safeID = (typeof id === 'string' && id.length > 0) || (typeof id === 'number' && Number.isSafeInteger(id) && id >= 0);
+      const safeTitle = (typeof a.titleId === 'string' && a.titleId.length > 0) || (typeof a.titleId === 'number' && Number.isSafeInteger(a.titleId) && a.titleId >= 0);
+      const valid = safeID && safeTitle && typeof a.gameAccountName === 'string' && a.gameAccountName.trim().length > 0 && typeof a.gameAccountRegion === 'string' && a.gameAccountRegion.trim().length > 0;
+      diagnostics.push({product: typeof a.localizedGameName === 'string' ? a.localizedGameName : '(unnamed product)',
+        title: safeTitle ? String(a.titleId) : '(missing title)', valid,
+        shape: {idType:typeof id, titleType:typeof a.titleId, nameType:typeof a.gameAccountName,
+                regionType:typeof a.gameAccountRegion,
+                uniqueKeys:Object.keys(a.gameAccountUniqueId || {}).sort().join(',')}});
+      if (valid) accounts.push({titleId:a.titleId, gameAccountUniqueId:{gameAccountId:String(id)},
+        gameAccountName:a.gameAccountName, gameAccountRegion:a.gameAccountRegion,
+        gameAccountStatus: typeof a.gameAccountStatus === 'string' ? a.gameAccountStatus : null});
+    }
     if (owner !== await identity()) throw new Error('identity changed');
-    return JSON.stringify({gameAccounts:accounts});
+    return JSON.stringify({gameAccounts:accounts, diagnostics});
+    } catch (_) {
+      return JSON.stringify({failure:controller.signal.aborted ? 'timeout' : stage});
     } finally { clearTimeout(deadline); }
     """
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -74,10 +91,21 @@ final class Probe: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             do {
                 let value = try await browser.callAsyncJavaScript(script, contentWorld:.defaultClient)
                 guard let text=value as? String, let data=text.data(using:.utf8) else { throw CocoaError(.coderReadCorrupt) }
+                let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                if let failure = object?["failure"] as? String, ["auth", "catalog", "schema", "timeout", "origin"].contains(failure) {
+                    result.string = "Discovery failed at stage: \(failure). No account IDs, credentials, or launch settings were saved."; return
+                }
                 let catalog=try GameAccountCatalog.decode(data)
-                result.string = catalog.gameAccounts.isEmpty ? "Blizzard returned an empty game-account list." : catalog.gameAccounts.map {
+                let diagnostics = object?["diagnostics"] as? [[String: Any]] ?? []
+                let omitted = diagnostics.filter { $0["valid"] as? Bool != true }
+                let accounts = catalog.gameAccounts.map {
                     "\($0.name) · \($0.region) · title \($0.titleID) · \($0.status ?? "Unknown status")"
-                }.joined(separator:"\n") + "\n\nDiscovery only. Launch selector mapping has not been verified."
+                }.joined(separator:"\n")
+                let shapes = diagnostics.map { row in
+                    let shape = row["shape"] as? [String: Any] ?? [:]
+                    return "\(row["product"] as? String ?? "Product") · title \(row["title"] as? String ?? "?"): id=\(shape["idType"] as? String ?? "?"), name=\(shape["nameType"] as? String ?? "?"), region=\(shape["regionType"] as? String ?? "?"), unique keys=\(shape["uniqueKeys"] as? String ?? "")"
+                }.joined(separator:"\n")
+                result.string = "Decoded \(catalog.gameAccounts.count) licences; \(omitted.count) rows do not match the expected schema.\n" + accounts + "\n\nSchema diagnostics (no account IDs):\n" + shapes + "\n\nDiscovery only. A partial result must not be used for account selection."
             } catch {
                 // JavaScript error descriptions can include URLs. Do not log them.
                 result.string="Could not read a valid account catalogue. Finish signing in and retry. The API may have changed or be unavailable. No launch settings were changed."

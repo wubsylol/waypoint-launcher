@@ -30,13 +30,13 @@ Its `MyGamesService.getGamesAndSubscriptions` performs `GET /api/games-and-subs`
 
 Waypoint already uses the same account origin through ProfileFetcher: POST `/api/` checks the session identity and GET `/api/details` reads profile metadata. Its existing per-account WebKit sessions are a natural place to make the read-only licence request. This is a private website API, not a documented stable developer API; handle schema changes and reauthentication explicitly. CN account-service discovery is not investigated here.
 
-The JavaScript bundle proves the field accesses, not a current authenticated response for this user's account. The prototype uses synthetic fixtures. No personal account response, cookies, login ticket or preference values are checked into this branch.
+The JavaScript bundle proves the field accesses, not a current authenticated response for this user's account. The decoder tests use synthetic fixtures. A first authenticated read did not decode successfully; the revised probe reports sanitized request stages and per-row shapes to distinguish authentication/API failures from schema mismatch. No personal account response, cookies, login ticket or preference values are checked into this branch.
 
 ## What this branch adds
 
 `Sources/WaypointCore/GameAccounts.swift` decodes a generic licence list. Identity includes title, region and game-account ID; a display name is not treated as identity. Integer IDs retain precision. Malformed rows and duplicate identities fail instead of silently presenting an incomplete list. No game-account field is converted into a launch selector, and no new code is connected to production launching.
 
-`tools/game-account-probe` is a separate AppKit application to validate discovery. It uses its own temporary WebKit session, lets the user sign in on Blizzard's account page, and reads the games endpoint only after a button press. It checks the authenticated owner before and after the request, refuses unsafe JavaScript numeric IDs, and returns only the fields above. It has a 15-second request deadline. Names, regions, titles and statuses are shown in the window; numeric game-account IDs remain in memory. The probe logs and saves no account data; its discovery requests are same-origin. Blizzard’s page may still load its normal CDN, sign-in, telemetry and CAPTCHA services. It does not use Waypoint's existing keychain entries, edit subscriptions, touch game files, or write launch preferences. Close the probe to discard its session.
+`tools/game-account-probe` is a separate AppKit application to validate discovery. It uses its own temporary WebKit session, lets the user sign in on Blizzard's account page, and reads the games endpoint only after a button press. It checks the authenticated owner before and after the request, refuses unsafe JavaScript numeric IDs, and returns only the fields above. It has a 15-second request deadline. Names, regions, titles and statuses are shown in the window; numeric game-account IDs remain in memory. Rows that do not fit the expected shape are counted and reported with product/title and field-type diagnostics. Partial lists are explicitly marked unsuitable for launch selection; they are not silently accepted as complete catalogues. The probe logs and saves no account data; its discovery requests are same-origin. Blizzard’s page may still load its normal CDN, sign-in, telemetry and CAPTCHA services. It does not use Waypoint's existing keychain entries, edit subscriptions, touch game files, or write launch preferences. Close the probe to discard its session.
 
 Build it without fetching Sparkle:
 
@@ -71,5 +71,5 @@ No client patching, game-data migration or updater changes are required by this 
 
 - The standalone AppKit probe compiled and its local signature verified.
 - `swift test --filter GameAccount` built Waypoint/Core and passed all four new tests.
-- The probe window and Blizzard sign-in page were checked visually. Authenticated discovery is pending user validation.
+- The probe window and Blizzard sign-in page were checked visually. The first authenticated read failed; revised diagnostic discovery is pending validation. The user has confirmed the account webpage itself lists their games; that is separate from validating the native decoder.
 - Independent pre-commit review found and resolved missing request timeouts and an overly broad network-privacy claim. No production-code integration blockers were asserted because production account selection is deliberately not implemented here.
