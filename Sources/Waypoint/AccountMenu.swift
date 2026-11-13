@@ -13,7 +13,6 @@ enum AccountMenu {
             let item = ActionItem(account.displayName, enabled: enabled) { model.switchAccount(to: account.id) }
             item.image = .account(account)
             item.state = account.id == model.activeAccount?.id ? .on : .off
-            if #available(macOS 14.4, *), account.battleTag != nil { item.subtitle = account.email }
             return item
         }
         if !items.isEmpty { items.append(.separator()) }
