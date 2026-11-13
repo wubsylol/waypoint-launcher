@@ -221,6 +221,7 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
     private var connectionSpinner = NSProgressIndicator()
     private var prefillTask: Task<Void, Never>?
     private var loadWatchdog: Task<Void, Never>?
+    private var browserSheet: BrowserReturnSheet?
 
     /// WebKit lets only browsers and the site's own apps use passkeys, so
     /// Blizzard's passkey sign-in can't finish in this window.
@@ -348,7 +349,10 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
             connectionSpinner.style = .spinning; connectionSpinner.controlSize = .small
             connectionSpinner.isDisplayedWhenStopped = false
             if preparedWebView == nil { connectionSpinner.startAnimation(nil) }
-            let footer = NSStackView(views: [help, connectionSpinner, connectionStatus, NSView(), retryButton, cancel])
+            let browser = NSButton(title:"Use Safari…",target:self,action:#selector(useBrowser))
+            let supportsBrowserReturn = url.host == "us.battle.net" && URLComponents(url:url,resolvingAgainstBaseURL:false)?.queryItems?.contains(where: { $0.name == "app" && $0.value == "WoW" }) == true
+            let footerViews: [NSView] = [help] + (supportsBrowserReturn ? [browser] : []) + [connectionSpinner, connectionStatus, NSView(), retryButton, cancel]
+            let footer = NSStackView(views: footerViews)
             footer.orientation = .horizontal; footer.spacing = 10
             let container = NSView()
             for view in [webView, footer] + (notice == nil ? [] : [noticeLabel]) {
@@ -362,7 +366,7 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
                 footer.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
                 footer.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
                 footer.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
-                connectionStatus.widthAnchor.constraint(lessThanOrEqualToConstant: 210),
+                connectionStatus.widthAnchor.constraint(lessThanOrEqualToConstant: 130),
             ])
             if notice != nil {
                 NSLayoutConstraint.activate([
@@ -419,6 +423,23 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
         }
     }
 
+    @objc private func useBrowser() {
+        guard browserSheet == nil, continuation != nil, let window, let url=initialURL else { return }
+        prefillTask?.cancel();loadWatchdog?.cancel();webView?.stopLoading();reveal()
+        connectionSpinner.stopAnimation(nil)
+        let sheet=BrowserReturnSheet();browserSheet=sheet
+        Task { [weak self] in
+            guard let self, self.continuation != nil, self.browserSheet === sheet else { return }
+            let token=await sheet.run(on:window,url:url)
+            guard self.continuation != nil, self.browserSheet === sheet else { return }
+            self.browserSheet=nil
+            if let token { self.typedAccountName=nil;self.finish(token) }
+            else {
+                self.connectionStatus.stringValue="Continue here or Retry"
+                self.retryButton.isHidden=false
+            }
+        }
+    }
     @objc private func cancel() { finish(nil) }
     @objc private func showHelp() {
         let alert = NSAlert()
@@ -530,6 +551,7 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
     private func finish(_ token: LoginToken?) {
         guard let continuation else { return }
         self.continuation = nil
+        browserSheet?.cancel();browserSheet=nil
         prefillTask?.cancel(); prefillTask = nil
         loadWatchdog?.cancel(); loadWatchdog = nil
         webView?.stopLoading()

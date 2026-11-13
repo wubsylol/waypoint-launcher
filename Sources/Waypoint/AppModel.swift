@@ -1141,13 +1141,12 @@ final class AppModel {
     private static let lastPlayedKey = "lastPlayedGame"
 
     /// The login page asks which game it signs in to (`app=`): the game
-    /// launched last, else the first that can be played, else Hearthstone,
-    /// which every account has.
+    /// launched last, else the first that can be played, else WoW for this fork’s fresh-install test.
     private func loginTarget() -> (codename: String, region: Region) {
         let last = UserDefaults.standard.string(forKey: Self.lastPlayedKey)
         let candidates = games.filter { $0.id == last } + games.filter { $0.id != last }
         let plan = candidates.lazy.compactMap { try? GameLauncher.plan(for: $0, region: self.regionOverride) }.first
-        return (plan?.codename ?? InstallableProduct.hearthstone.codename, plan?.region ?? regionOverride ?? .us)
+        return (plan?.codename ?? "WoW", plan?.region ?? regionOverride ?? .us)
     }
 
     /// Remembers who signed in where: that account, new or saved, becomes
