@@ -34,3 +34,21 @@ private let wowTwo = #"{"titleId":"WoW","gameAccountUniqueId":{"gameAccountId":"
     #expect(throws: (any Error).self) { try catalog(wowOne.replacingOccurrences(of: "WoW1", with: "")) }
     #expect(try catalog("").gameAccounts.isEmpty)
 }
+
+@Test func wowDiscoveryFiltersByObservedTitleBeforeDecodingOtherGames() throws {
+    let wow = wowOne.replacingOccurrences(of: "\"WoW\"", with: "5730135")
+    let other = #"{"titleId":1465140039,"gameAccountName":null,"gameAccountUniqueId":{"gameAccountId":202}}"#
+    let unrelated = #"{"titleId":1095849281,"gameAccountName":null}"#
+    let data = Data("{\"gameAccounts\":[\(wow),\(other),\(unrelated),null]}".utf8)
+    let accounts = try GameAccountCatalog.decodeWoW(data).gameAccounts
+    #expect(accounts.count == 1)
+    #expect(accounts.first?.name == "WoW1")
+    #expect(accounts.first?.titleID == "5730135")
+}
+@Test func wowDiscoveryRejectsMalformedRelevantRowsRatherThanHidingThem() throws {
+    let malformed = Data(#"{"gameAccounts":[{"titleId":5730135,"gameAccountName":null}]}"#.utf8)
+    #expect(throws: (any Error).self) { try GameAccountCatalog.decodeWoW(malformed) }
+    let wow = wowOne.replacingOccurrences(of: "\"WoW\"", with: "\"5730135\"")
+    let duplicate = Data("{\"gameAccounts\":[\(wow),\(wow)]}".utf8)
+    #expect(throws: (any Error).self) { try GameAccountCatalog.decodeWoW(duplicate) }
+}

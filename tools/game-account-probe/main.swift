@@ -95,17 +95,20 @@ final class Probe: NSObject, NSApplicationDelegate, WKNavigationDelegate {
                 if let failure = object?["failure"] as? String, ["auth", "catalog", "schema", "timeout", "origin"].contains(failure) {
                     result.string = "Discovery failed at stage: \(failure). No account IDs, credentials, or launch settings were saved."; return
                 }
-                let catalog=try GameAccountCatalog.decode(data)
                 let diagnostics = object?["diagnostics"] as? [[String: Any]] ?? []
                 let omitted = diagnostics.filter { $0["valid"] as? Bool != true }
-                let accounts = catalog.gameAccounts.map {
+                let invalidWoW = diagnostics.contains { $0["title"] as? String == "5730135" && $0["valid"] as? Bool != true }
+                let wowAccounts: [GameAccount] = invalidWoW ? [] : try GameAccountCatalog.decodeWoW(data).gameAccounts
+                let otherCount = diagnostics.filter { $0["title"] as? String != "5730135" && $0["valid"] as? Bool == true }.count
+                let accounts = wowAccounts.map {
                     "\($0.name) · \($0.region) · title \($0.titleID) · \($0.status ?? "Unknown status")"
                 }.joined(separator:"\n")
                 let shapes = diagnostics.map { row in
                     let shape = row["shape"] as? [String: Any] ?? [:]
                     return "\(row["product"] as? String ?? "Product") · title \(row["title"] as? String ?? "?"): id=\(shape["idType"] as? String ?? "?"), name=\(shape["nameType"] as? String ?? "?"), region=\(shape["regionType"] as? String ?? "?"), unique keys=\(shape["uniqueKeys"] as? String ?? "")"
                 }.joined(separator:"\n")
-                result.string = "Decoded \(catalog.gameAccounts.count) licences; \(omitted.count) rows do not match the expected schema.\n" + accounts + "\n\nSchema diagnostics (no account IDs):\n" + shapes + "\n\nDiscovery only. A partial result must not be used for account selection."
+                let summary = invalidWoW ? "WoW discovery incomplete: no licence list will be presented." : "WoW licences: \(wowAccounts.count). Other rows matching expected fields: \(otherCount). Non-licence/incomplete rows: \(omitted.count)."
+                result.string = summary + "\n" + accounts + "\n\nSchema diagnostics (no account IDs):\n" + shapes + "\n\nDiscovery only. A partial result must not be used for account selection."
             } catch {
                 // JavaScript error descriptions can include URLs. Do not log them.
                 result.string="Could not read a valid account catalogue. Finish signing in and retry. The API may have changed or be unavailable. No launch settings were changed."

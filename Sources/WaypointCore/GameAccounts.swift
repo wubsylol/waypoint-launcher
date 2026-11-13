@@ -55,3 +55,35 @@ public struct GameAccountCatalog: Decodable, Sendable {
         return result
     }
 }
+
+extension GameAccountCatalog {
+    /// The account website uses 5730135 (0x576f57, WoW) for the observed WoW licences.
+    /// Filter by that title before requiring per-licence names: unrelated games
+    /// legitimately return null names or have no game account at all.
+    public static func decodeWoW(_ data: Data) throws -> GameAccountCatalog {
+        struct Envelope: Decodable {
+            let accounts: [GameAccount]
+            enum Keys: String, CodingKey { case gameAccounts }
+            enum RowKeys: String, CodingKey { case titleId }
+            init(from decoder: Decoder) throws {
+                let fields = try decoder.container(keyedBy: Keys.self)
+                var rows = try fields.nestedUnkeyedContainer(forKey: .gameAccounts)
+                var found: [GameAccount] = []
+                while !rows.isAtEnd {
+                    let row = try rows.superDecoder()
+                    guard let record = try? row.container(keyedBy: RowKeys.self) else { continue }
+                    let title = (try? record.decode(String.self, forKey: .titleId))
+                        ?? (try? record.decode(UInt64.self, forKey: .titleId)).map(String.init)
+                    guard title == "5730135" else { continue }
+                    found.append(try GameAccount(from: row))
+                }
+                accounts = found
+            }
+        }
+        let result = try JSONDecoder().decode(Envelope.self, from: data)
+        guard Set(result.accounts.map(\.id)).count == result.accounts.count else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Duplicate WoW game-account identity"))
+        }
+        return GameAccountCatalog(gameAccounts: result.accounts)
+    }
+}

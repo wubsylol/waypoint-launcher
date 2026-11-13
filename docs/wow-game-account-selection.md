@@ -30,7 +30,7 @@ Its `MyGamesService.getGamesAndSubscriptions` performs `GET /api/games-and-subs`
 
 Waypoint already uses the same account origin through ProfileFetcher: POST `/api/` checks the session identity and GET `/api/details` reads profile metadata. Its existing per-account WebKit sessions are a natural place to make the read-only licence request. This is a private website API, not a documented stable developer API; handle schema changes and reauthentication explicitly. CN account-service discovery is not investigated here.
 
-The JavaScript bundle proves the field accesses, not a current authenticated response for this user's account. The decoder tests use synthetic fixtures. A first authenticated read did not decode successfully; the revised probe reports sanitized request stages and per-row shapes to distinguish authentication/API failures from schema mismatch. No personal account response, cookies, login ticket or preference values are checked into this branch.
+The JavaScript bundle proves the field accesses, not a current authenticated response for this user's account. The automated tests use synthetic fixtures. A first authenticated read failed because unrelated games have null account names. A revised diagnostic read successfully decoded the live WoW records. Their observed titleId is 5730135; their unique-ID object has gameAccountId, gameServiceRegionId and programId. No private field values or ownership lists are recorded here. No personal account response, cookies, login ticket or preference values are checked into this branch.
 
 ## What this branch adds
 
@@ -65,11 +65,17 @@ A game-account picker is not functional merely because a menu can show two strin
 4. Exercise no licences, one licence, multiple licences, expired/banned/trial statuses, expired web session, stale saved selection and account switching during refresh. Use synthetic fixtures for automated coverage.
 5. Confirm unrelated games launch unchanged, and that a prior GAME_ACCOUNT is not silently reused for a different owner.
 
-No client patching, game-data migration or updater changes are required by this approach. No real game-account switching or authenticated discovery has yet been validated by this branch. The isolated probe and decoder are preparation for that test, not a claimed solution.
+No client patching, game-data migration or updater changes are required by this approach. Authenticated discovery was validated with the diagnostic probe. No real game-account switching has yet been validated by this branch. The isolated probe and decoder are preparation for that test, not a claimed solution.
 
 ## Validation performed
 
 - The standalone AppKit probe compiled and its local signature verified.
-- `swift test --filter GameAccount` built Waypoint/Core and passed all four new tests.
-- The probe window and Blizzard sign-in page were checked visually. The first authenticated read failed; revised diagnostic discovery is pending validation. The user has confirmed the account webpage itself lists their games; that is separate from validating the native decoder.
+- `swift test --filter 'GameAccount|wowDiscovery'` built Waypoint/Core and passed all six new tests after the live-schema correction.
+- The probe window and Blizzard sign-in page were checked visually. The first authenticated read failed; revised diagnostic discovery succeeded. The user completed a second read; the native decoder then successfully decoded the WoW records. Unrelated games with null names were distinguished through field-type diagnostics.
 - Independent pre-commit review found and resolved missing request timeouts and an overly broad network-privacy claim. No production-code integration blockers were asserted because production account selection is deliberately not implemented here.
+
+## Live-schema correction and selector evidence
+
+The probe now filters WoW by observed canonical title `5730135` before decoding the selected family; unrelated null-name products are not presented as WoW licences. A malformed relevant row suppresses the whole WoW list rather than silently hiding that licence. Diagnostic information for other products remains available for research; it does not imply those games use the same selection semantics.
+
+A local comparison, performed using in-memory label fingerprints and without printing or saving selector/name values, found that the existing WoW `GAME_ACCOUNT` string matched one of the discovered licence names. This is evidence for a name-based selector for this installation, not proof across all accounts or regions. Two distinct normal Battle.net selections and real launches remain required before claiming functional switching.
