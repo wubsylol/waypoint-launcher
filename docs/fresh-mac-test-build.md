@@ -8,6 +8,6 @@ Cold first sign-in now requests WoW authorization instead of Hearthstone when no
 
 The installer is already available without a signed-in account, and uses public catalogue/CDN data. New installs create their own records; old Battle.net files are not prerequisites. Native account selection occurs after the game exists, using its build and the saved WoW ticket.
 
-Required other-Mac acceptance: authenticate → install Forever/Retail → choose licence → reach expected character selection → restart app and repeat. This sequence is not claimed to have passed on a genuinely clean machine until the user reports it. The manually pasted Safari ticket previously reached real Forever character selection on the development Mac.
+Required other-Mac acceptance: authenticate → install Forever/Retail → choose licence → reach expected character selection → restart app and repeat. The user subsequently reported that the delivered build worked on the freshly cleared M5 Pro (2026-11-14). The exact login method and restart coverage were not separately specified. The manually pasted Safari ticket previously reached real Forever character selection on the development Mac.
 
 110 selected parser, native-recovery, launch, account, game-library, installer and metadata tests passed during preparation. Release architecture, minimum OS, dependency paths, signatures and archive contents are checked before delivery. The build is ad-hoc signed, not Developer ID notarized. No upstream PR has been submitted.
