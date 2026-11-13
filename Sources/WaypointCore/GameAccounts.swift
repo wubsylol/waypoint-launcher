@@ -15,6 +15,10 @@ public struct GameAccount: Decodable, Equatable, Sendable, Identifiable {
     public let status: String?
     public var id: ID { ID(title: titleID, region: region, account: accountID) }
 
+    public init(titleID: String, accountID: String, name: String, region: String, status: String? = nil) {
+        self.titleID = titleID; self.accountID = accountID; self.name = name; self.region = region; self.status = status
+    }
+
     private enum CodingKeys: String, CodingKey {
         case titleID = "titleId", uniqueID = "gameAccountUniqueId"
         case name = "gameAccountName", region = "gameAccountRegion", status = "gameAccountStatus"

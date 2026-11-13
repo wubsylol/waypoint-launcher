@@ -1,12 +1,12 @@
 # Development feature: WoW account picker
 
-Branch: `feature/game-account-selection`. No upstream PR submitted.
+Branch: `investigate/silent-account-discovery`. No upstream PR submitted.
 
 ## Behavior
 
 - Right-click an installed native WoW title (or use More) and choose **Select account…**.
-- The existing Battle.net identity's web session is used to read Blizzard's WoW licence list. An account-page sign-in may be needed. The endpoint's authenticated owner must match the requested Battle.net identity before and after reading the list.
-- The picker displays that region's WoW licence names and server-reported status. It does not claim a licence has access to a particular edition; Blizzard's game servers enforce entitlement.
+- The saved WoW game authorization is used for native game-service discovery. No account portal is loaded and no second website login is requested. The owner is verified at logon and for every resolved licence name.
+- The picker displays the native service's WoW licence names for the selected region. It does not receive subscription status. It does not claim a licence has access to a particular edition; Blizzard's game servers enforce entitlement.
 - **Use account** remembers the choice for Battle.net owner + product/edition UID + play region. Cancelling preserves the old choice. The context menu shows the remembered name.
 - Play uses the remembered choice; if none exists, it presents the picker before launching. It writes the selected licence name to `Launch Options/WoW/GAME_ACCOUNT` together with the owner-matched token, region and locale.
 - Changing Battle.net identity or region cannot reuse a choice from another scope. Signing out forgets that owner's choices. A saved choice may become obsolete on the server; use Select account to refresh/change it if the game rejects it.
@@ -16,17 +16,17 @@ Branch: `feature/game-account-selection`. No upstream PR submitted.
 
 The new selector handoff has not yet been verified by launching two distinct real licences from this build. Prior investigation found an existing GAME_ACCOUNT matching a discovered licence name, which supports this implementation but is not a substitute for the two-account test.
 
-Only native WoW account selection is implemented. The China account-service flow is explicitly unsupported. Unrelated titles keep their original launch behavior. Discovery uses a private website API and may need revision if Blizzard changes its schema. Saved names/IDs are local account preferences, never logged by this feature. No game data, installations or subscriptions are changed by discovery/selection itself; actual Play updates normal launch preferences.
+Only native WoW account selection is implemented. The native backend currently supports Americas only, the region verified live. Other regions are explicitly unsupported until tested. Unrelated titles keep their original launch behavior. Discovery uses an independently implemented native TLS/protobuf exchange and may need revision if Blizzard changes its protocol. It checks for library-known open WoW clients before every attempt, including Retry. Unknown external installations cannot be guarded reliably. Saved names/IDs are local account preferences, never logged by this feature. No game data, installations or subscriptions are changed by discovery/selection itself; actual Play updates normal launch preferences.
 
 The existing startup handoff guard now reserves the signing phase before the first await and blocks other launches during the launching phase. Its four-second startup wait is not proof that the client has consumed shared launch preferences. Avoid simultaneous independent launchers/startups during live validation.
 
 ## Validation
 
-29 selected tests passed, covering existing native/Windows launch planning and handoff helpers, licence parsing, owner/edition/region isolation, replacement, persistence across preference reload, sign-out cleanup and encrypted token/account/region handoff in an isolated preference domain. Test code does not write real net.battle login values.
+33 selected tests passed, covering the bounded protobuf codec, existing native/Windows launch planning and handoff helpers, licence parsing, owner/edition/region isolation, replacement, preference reload, sign-out cleanup and encrypted token/account/region handoff in an isolated preference domain. Test code does not write real net.battle login values.
 
-Independent review findings addressed: reserve the launch phase before suspending, block overlapping startup handoffs, reject unsafe ID types before coercion, restore the full-size web view for refresh, and isolate preference-domain tests.
+Independent review covered protocol parity, owner verification, cancellation/time limits, UI cancellation and retry races. No game-content or credential migration is introduced. Both the standalone diagnostic and exact Swift backend completed owner-verified discovery against Blizzard. The integrated native picker then loaded the list in the development app without a portal or another login. The toolbar has no redundant '+'.
 
-The development bundle built and passed deep signature verification. Live UI checking encountered a startup stall while the app was enumerating the external game folder; this is being investigated separately. Account picker layout, live discovery inside the integrated window, remembered selection after restart, toolbar removal in the live UI and actual selected-account game login still require verification.
+The development app built and passed deep signature verification. The earlier external-folder startup stall was a macOS permission prompt, not evidence of a broken drive. Distinct-licence launches, remembered choice after restart, and failure recovery still require live acceptance; see [acceptance-tests.md](acceptance-tests.md).
 
 ## Live test
 

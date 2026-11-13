@@ -898,7 +898,7 @@ final class AppModel {
                 let owner = token.accountID
                 guard let identity = accountList[owner] else { phases[game.id] = .idle; return }
                 var choice = gameAccountChoices.choice(owner: owner, uid: game.id, region: plan.region.rawValue)
-                if choice == nil { choice = await chooseGameAccount(game, account: identity, region: plan.region) }
+                if choice == nil { choice = await chooseGameAccount(game, account: identity, region: plan.region, token: token) }
                 guard let choice else { phases[game.id] = .idle; return }
                 guard choice.region.caseInsensitiveCompare(plan.region.rawValue) == .orderedSame else {
                     throw CocoaError(.validationMissingMandatoryProperty)
@@ -957,12 +957,33 @@ final class AppModel {
         }
         do {
             let plan = try GameLauncher.plan(for:game,region:regionOverride)
-            _ = await chooseGameAccount(game, account:account, region:plan.region)
+            guard let token = await token(for: plan, gameName: game.displayName, account: account,
+                                          activate: false, forceSignIn: false) else { return }
+            _ = await chooseGameAccount(game, account:account, region:plan.region, token: token)
         } catch { phases[game.id] = .failed(errorMessage(error)) }
     }
-    private func chooseGameAccount(_ game: Game, account: Account, region: Region) async -> GameAccountSelection? {
+    private func chooseGameAccount(_ game: Game, account: Account, region: Region, token: LoginToken) async -> GameAccountSelection? {
         let previous = gameAccountChoices.choice(owner:account.id,uid:game.id,region:region.rawValue)
-        guard let choice = await GameAccountPicker().run(account:account,gameName:game.displayName,region:region,selected:previous) else { return nil }
+        guard token.accountID == account.id else { return nil }
+        // A discovery connection is a separate game-service session. Avoid
+        // disrupting any open WoW client, even one outside this title.
+        refreshRunning()
+        guard !games.contains(where: { GameCatalog.family(for: $0.install.productCode) == .worldOfWarcraft && isRunning($0) }) else {
+            let alert = NSAlert(); alert.messageText = "Close World of Warcraft first"
+            alert.informativeText = "Account discovery creates a separate game session. Close WoW, then select an account again."
+            alert.runModal(); return nil
+        }
+        guard let choice = await GameAccountPicker().run(account:account,gameName:game.displayName,region:region,selected:previous, load: {
+            self.refreshRunning()
+            guard !self.games.contains(where: { GameCatalog.family(for: $0.install.productCode) == .worldOfWarcraft && self.isRunning($0) }) else {
+                throw NativeGameAccounts.Failure.gameRunning
+            }
+            _ = try GameLauncher.plan(for: game, region: region)
+            guard let appURL = game.appURL, let bundle = Bundle(url: appURL),
+                  let version = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+                  let build = UInt64(version.split(separator: ".").last ?? "") else { throw NativeGameAccounts.Failure.unavailable }
+            return try await NativeGameAccounts().discover(token: token, build: build, region: region)
+        }) else { return nil }
         // The caller's account/region snapshot owns this choice, not a newly selected identity.
         gameAccountChoices.select(choice,owner:account.id,uid:game.id,region:region.rawValue)
         return choice
