@@ -9,11 +9,13 @@ private final class AccountTestTransport: NativeAccountTransport {
     var pending: CheckedContinuation<Data, Error>?
     var connectFails = false
     var sendFailsAt: Int?
+    var written: [Data] = []
     var sends = 0
     var stall: Bool
     init(_ input: Data = Data(), stall: Bool = false) { self.input = input; self.stall = stall }
     func connect() async throws { if connectFails { throw NativeGameAccounts.Failure.unavailable } }
     func send(_ data: Data) async throws {
+        written.append(data)
         sends += 1
         if cancelled { throw CancellationError() }
         if sends == sendFailsAt { throw NativeGameAccounts.Failure.unavailable }
@@ -102,4 +104,56 @@ private let accountTestToken = LoginToken("US-0123456789abcdef0123456789abcdef-1
         Issue.record("Wrong-owner account info returned a catalogue")
     } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled) }
     catch { Issue.record("Account-info owner mismatch was not recognized") }
+}
+
+
+private func friendPage(_ id: UInt64, tag: String, continuation: UInt64? = nil) -> Data {
+    var page = BGSWire.bytes(1, BGSWire.number(1, id) + BGSWire.text(3, tag) + BGSWire.text(4, "Private real name") + BGSWire.text(7, "Private note"))
+    if let continuation { page += BGSWire.number(2, continuation) }
+    return page
+}
+@Test @MainActor func friendsSnapshotPagesReadOnlyRequestsAndClosesSession() async throws {
+    let replies = Array(accountReplies().prefix(3)) + [
+        accountFrame(token: 2, body: friendPage(42, tag: "Friend#1234", continuation: 11)),
+        accountFrame(token: 3, body: friendPage(43, tag: "Other#5678"))]
+    let transport = AccountTestTransport(replies.reduce(Data(), +))
+    let friends = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us)
+    #expect(friends.map(\.displayName) == ["Friend#1234", "Other#5678"])
+    #expect(transport.cancelled)
+    // After connection/authentication, every request is GetFriends v2 method 5.
+    for packet in transport.written.dropFirst(2) {
+        let prefix = [UInt8](packet.prefix(2)), count = Int(prefix[0]) * 256 + Int(prefix[1])
+        let h = try BGSWire.decode(Data(packet.dropFirst(2).prefix(count)))
+        #expect(try BGSWire.uint(h, 11) == 0x5869be8c)
+        #expect(try BGSWire.uint(h, 2) == 5)
+    }
+}
+@Test @MainActor func friendsSnapshotRejectsDuplicateIDsAndLoopedPagination() async {
+    for second in [friendPage(42, tag: "Again#1234"), friendPage(43, tag: "Other#5678", continuation: 11)] {
+        let replies = Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: friendPage(42, tag: "Friend#1234", continuation: 11)), accountFrame(token: 3, body: second)]
+        let transport = AccountTestTransport(replies.reduce(Data(), +))
+        do {
+            _ = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us)
+            Issue.record("Malformed friends pagination returned a list")
+        } catch { #expect(transport.cancelled) }
+    }
+}
+@Test @MainActor func friendsSnapshotRejectsWrongOwnerBeforeSocialRequest() async {
+    let transport = AccountTestTransport(Array(accountReplies(owner: 999).prefix(3)).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Wrong-owner friends snapshot succeeded")
+    } catch NativeGameAccounts.Failure.owner { #expect(transport.written.count == 2); #expect(transport.cancelled) }
+    catch { Issue.record("Wrong-owner result did not report mismatch") }
+}
+@Test func friendSnapshotParserRejectsBadNamesAndDoesNotExposePrivateFields() throws {
+    let normal = try FriendSnapshotPage.decode(friendPage(42, tag: "Friend#1234"))
+    #expect(normal.friends.first?.battleTag == "Friend#1234")
+    #expect(normal.friends.first?.id == "42")
+    let missing = try FriendSnapshotPage.decode(BGSWire.bytes(1, BGSWire.number(1, 42)))
+    #expect(missing.friends.first?.displayName == "Friend 42")
+    for bytes in [BGSWire.number(1, 0), BGSWire.number(1, 42) + BGSWire.text(3, "bad\nname"), BGSWire.number(1, 42) + BGSWire.text(3, String(repeating: "x", count: 257))] {
+        #expect(throws: (any Error).self) { try FriendSnapshotPage.decode(BGSWire.bytes(1, bytes)) }
+    }
+    #expect(try FriendSnapshotPage.decode(Data()).friends.isEmpty)
 }

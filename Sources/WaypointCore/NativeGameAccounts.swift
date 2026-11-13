@@ -32,7 +32,7 @@ public final class NativeGameAccounts {
         self.transport = transport; self.timeout = timeout
     }
     public func cancel() { closed = true; transport.cancel() }
-    public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
+    private func authenticated<T>(token: LoginToken, build: UInt64, region: Region, operation: () async throws -> T) async throws -> T {
         guard region == .us else { throw Failure.unsupported }
         guard let owner = UInt64(token.accountID), owner > 0, build > 0 else { throw Failure.owner }
         expectedOwner = owner
@@ -55,6 +55,13 @@ public final class NativeGameAccounts {
                 let (header, body) = try await receive()
                 try notification(header, body)
             }
+            return try await operation()
+        } onCancel: { Task { @MainActor in self.cancel() } }
+    }
+
+    public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
+        try await authenticated(token: token, build: build, region: region) {
+            let owner = expectedOwner
             let body = try await call(hash: 0x22dc2464, method: 108)
             let links = try W.decode(W.data(W.decode(body), 1))[1] ?? []
             guard links.count <= 100 else { throw Failure.unavailable }
@@ -79,7 +86,30 @@ public final class NativeGameAccounts {
                 accounts.append(GameAccount(titleID: "5730135", accountID: String(id), name: name, region: region.rawValue))
             }
             return accounts.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        } onCancel: { [weak self] in Task { @MainActor in self?.cancel() } }
+        }
+    }
+
+    /// Experimental read-only v2 snapshot. Does not subscribe, set presence,
+    /// mutate friendships, send messages, or persist any returned friend data.
+    public func friends(token: LoginToken, build: UInt64, region: Region) async throws -> [BattleNetFriend] {
+        try await authenticated(token: token, build: build, region: region) {
+            var result: [BattleNetFriend] = [], seenIDs = Set<String>(), continuations = Set<UInt64>()
+            var continuation: UInt64 = 0
+            for _ in 0..<20 {
+                let request = continuation == 0 ? Data() : W.number(2, continuation)
+                let page = try FriendSnapshotPage.decode(await call(hash: 0x5869be8c, method: 5, body: request))
+                for friend in page.friends {
+                    guard seenIDs.insert(friend.id).inserted, result.count < 1000 else { throw Failure.unavailable }
+                    result.append(friend)
+                }
+                guard let next = page.continuation, next != 0 else {
+                    return result.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+                }
+                guard continuations.insert(next).inserted else { throw Failure.unavailable }
+                continuation = next
+            }
+            throw Failure.unavailable
+        }
     }
     private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil) async throws {
         try Task.checkCancellation()
