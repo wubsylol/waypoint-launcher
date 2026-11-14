@@ -14,8 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     static func main() {
         let app = NSApplication.shared
-        // Keep all Waypoint windows and panels dark, independent of macOS.
-        app.appearance = NSAppearance(named: .darkAqua)
+        // Preserve this fork’s previous Dark default until a choice is saved.
+        UserDefaults.standard.register(defaults: [AppAppearance.defaultsKey: AppAppearance.Mode.dark.rawValue])
+        AppAppearance.apply()
         if ProcessInfo.processInfo.environment["WAYPOINT_SHARED_SIGNIN_PROBE"] == "1" {
             let probe = SharedSignInProbe()
             app.delegate = probe; app.setActivationPolicy(.regular)

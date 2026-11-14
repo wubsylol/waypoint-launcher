@@ -261,7 +261,7 @@ final class AppModel {
         })
         Task {
             await refreshCatalog()
-            await checkForUpdates()
+            await checkForUpdatesInBackground()
         }
         Task { await setUpAccounts() }
     }
@@ -443,7 +443,18 @@ final class AppModel {
 
     /// Asks Blizzard's version service which build is live. Cheap (one small
     /// request per game), throttled to every 15 minutes unless forced.
+    /// Refresh the existing off-main-thread installation scan before polling,
+    /// even while menu-only and inactive: another launcher may have updated a game.
+    func checkForUpdatesInBackground() async {
+        guard !isPreparingToQuit, UpdatePreferences.automatic() else { return }
+        if scanOffMainThread == nil { scanOffMainThreadOnce() }
+        while let scan = scanOffMainThread { await scan.value }
+        await checkForUpdates()
+    }
+
     func checkForUpdates(force: Bool = false) async {
+        // Do not consume the throttle on startup before external drives are read.
+        while let scan = scanOffMainThread { await scan.value }
         guard !isPreparingToQuit,
               updateCheckSchedule.request(force: force, automatic: UpdatePreferences.automatic()) else { return }
         defer { updateCheckSchedule.cancel() }

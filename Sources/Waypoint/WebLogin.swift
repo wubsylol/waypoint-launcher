@@ -332,7 +332,6 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 720),
                                   styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
             window.title = title
-            window.appearance = NSAppearance(named: .darkAqua)
             window.contentMinSize = NSSize(width: 480, height: 600)
             let noticeLabel = NSTextField(wrappingLabelWithString: notice ?? "")
             noticeLabel.textColor = .secondaryLabelColor
