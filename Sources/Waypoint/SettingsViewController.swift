@@ -13,6 +13,7 @@ final class SettingsViewController: NSViewController {
     private let automaticCheckbox = NSButton(checkboxWithTitle: "Automatically check for game updates", target: nil, action: nil)
     private let notificationsCheckbox = NSButton(checkboxWithTitle: "Notify me when updates are available", target: nil, action: nil)
     private let testNotificationButton = NSButton(title: "Send test notification", target: nil, action: nil)
+    private let notificationTestNote = NSTextField(wrappingLabelWithString: "")
     private let backgroundNote = NSTextField(wrappingLabelWithString: "")
     private let loginSettings = NSButton(title: "Login Items Settings…", target: nil, action: nil)
     private var changingLogin = false
@@ -90,6 +91,10 @@ final class SettingsViewController: NSViewController {
             (loginSettings, #selector(openLoginSettings)),
             (testNotificationButton, #selector(sendTestNotification)),
         ] { button.target = self; button.action = action }
+        notificationTestNote.font = .preferredFont(forTextStyle: .subheadline)
+        notificationTestNote.textColor = .secondaryLabelColor
+        notificationTestNote.preferredMaxLayoutWidth = 360
+        notificationTestNote.widthAnchor.constraint(equalToConstant: 360).isActive = true
         backgroundNote.font = .preferredFont(forTextStyle: .subheadline)
         backgroundNote.textColor = .secondaryLabelColor
         backgroundNote.preferredMaxLayoutWidth = 360
@@ -98,7 +103,7 @@ final class SettingsViewController: NSViewController {
         backgroundOptions.orientation = .vertical
         backgroundOptions.alignment = .leading
         backgroundOptions.spacing = 8
-        let updateOptions = NSStackView(views: [automaticCheckbox, notificationsCheckbox, testNotificationButton, backgroundNote])
+        let updateOptions = NSStackView(views: [automaticCheckbox, notificationsCheckbox, testNotificationButton, notificationTestNote, backgroundNote])
         updateOptions.orientation = .vertical
         updateOptions.alignment = .leading
         updateOptions.spacing = 8
@@ -162,7 +167,9 @@ final class SettingsViewController: NSViewController {
         loginCheckbox.state = backgroundServices.loginStatus == .enabled || backgroundServices.loginStatus == .requiresApproval ? .on : .off
         loginCheckbox.isEnabled = !changingLogin && backgroundServices.supportsSystemIntegration
         notificationsCheckbox.isEnabled = !changingNotifications && backgroundServices.supportsSystemIntegration
-        testNotificationButton.isEnabled = backgroundServices.supportsSystemIntegration &&
+        notificationTestNote.stringValue = backgroundServices.notificationTestStatus ?? ""
+        notificationTestNote.isHidden = backgroundServices.notificationTestStatus == nil
+        testNotificationButton.isEnabled = !backgroundServices.isTestingNotification && backgroundServices.supportsSystemIntegration &&
             defaults.bool(forKey: UpdatePreferences.notificationsKey) && backgroundServices.notificationStatus == .authorized
         loginSettings.isHidden = backgroundServices.loginStatus != .requiresApproval
         var note = "Checks installed games every 30 minutes while Waypoint is running. Updates require your approval. This personal build does not check for Waypoint updates."

@@ -12,6 +12,8 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
     private(set) var loginStatus: SMAppService.Status = .notRegistered
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var errorMessage: String?
+    private(set) var notificationTestStatus: String?
+    private(set) var isTestingNotification = false
     @ObservationIgnored var openLibrary: (() -> Void)?
     @ObservationIgnored var openAppUpdate: (() -> Void)?
     @ObservationIgnored private var announceAppUpdate: (() -> Void)?
@@ -113,17 +115,51 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func sendTestNotification() async {
-        guard supportsSystemIntegration,
+        guard supportsSystemIntegration, !isTestingNotification,
               UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey) else { return }
+        isTestingNotification = true
+        defer { isTestingNotification = false }
         errorMessage = nil
+        notificationTestStatus = "Sending test notification…"
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
+            notificationTestStatus = "macOS has blocked notifications. Enable Waypoint in System Settings → Notifications."
+            refreshStatus()
+            return
+        }
+        guard UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey) else {
+            notificationTestStatus = "Test cancelled: update notifications were turned off."
+            return
+        }
+        let identifier = "waypoint-notification-test"
+        let runID = UUID().uuidString
+        center.removeDeliveredNotifications(withIdentifiers: [identifier])
         let content = UNMutableNotificationContent()
+        content.userInfo = ["waypointTestRun": runID]
         content.title = "Waypoint notifications are ready"
         content.body = "You’ll be notified when an installed game update is available."
         content.sound = .default
         do {
-            try await UNUserNotificationCenter.current().add(
-                UNNotificationRequest(identifier: "waypoint-notification-test", content: content, trigger: nil))
-        } catch { errorMessage = "Could not send test notification: \(error.localizedDescription)" }
+            try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+            // The scheduling acknowledgement precedes delivery. Give the system
+            // a moment, then inspect only our own test notification.
+            try await Task.sleep(for: .seconds(1))
+            let delivered = await center.deliveredNotifications()
+            let confirmed = delivered.contains {
+                $0.request.identifier == identifier && $0.request.content.userInfo["waypointTestRun"] as? String == runID
+            }
+            if confirmed {
+                notificationTestStatus = "Delivered to Notification Centre. Focus and screen sharing can hide the banner."
+            } else {
+                notificationTestStatus = "Accepted by macOS; no delivery confirmed yet. Check Focus and notification settings, including notifications while sharing the display."
+            }
+            Log.info(.app, "notification_test", nil, ["delivered": confirmed,
+                "alerts_enabled": settings.alertSetting == .enabled])
+        } catch {
+            notificationTestStatus = "Could not send test notification: \(error.localizedDescription)"
+            Log.warning(.app, "notification_test_failed", nil, ["error": error.localizedDescription])
+        }
     }
 
     func setHideDock(_ hidden: Bool) {
