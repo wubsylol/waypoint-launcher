@@ -11,13 +11,13 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 480), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Read-only Experiment (client-call control 5)"
+        window.title = "Waypoint Friends — Read-only Experiment (session diagnostics 6)"
         window.isReleasedWhenClosed = false; window.delegate = self
-        let title = NSTextField(labelWithString: "Battle.net friends snapshot")
+        let title = NSTextField(labelWithString: "Battle.net connection and session diagnostics")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. This test changes only the current friends request’s client-call flag. No subscription or new application session is created. Online status is not checked.")
+        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. Reads only whether connection/logon metadata is present, then queries existing session state. It sends no session creation, restoration or destruction requests, retrieves no friends and shows no identifiers.")
         explanation.textColor = .secondaryLabelColor
-        button = NSButton(title: "Read friends", target: self, action: #selector(readFriends))
+        button = NSButton(title: "Read session diagnostics", target: self, action: #selector(readFriends))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelRead))
         let actions = NSStackView(views: [button, cancel, NSView()]); actions.spacing = 10
         output.isEditable = false; output.isRichText = false; output.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -42,7 +42,7 @@ import WaypointCore
         guard let account = AccountList.load(from: defaults).active else { status.stringValue = "Select an account in Waypoint first."; return }
         let vault = TokenVault(service: "io.wubs.waypoint-review: Battle.net login tokens")
         guard let token = vault.token(account: account.id, codename: "WoW"), token.accountID == account.id else { status.stringValue = "No saved WoW login is available. This test will not request another sign-in."; return }
-        button.isEnabled = false; status.stringValue = "Checking public build metadata, then requesting a friends snapshot…"
+        button.isEnabled = false; status.stringValue = "Checking public build metadata, then querying existing session state…"
         task = Task { [weak self] in
             guard let self else { return }
             defer { self.task = nil; self.button.isEnabled = true }
@@ -55,19 +55,24 @@ import WaypointCore
                 guard AccountList.load(from: self.defaults).activeID == account.id, !self.gameIsRunning(), version.buildID > 0, version.region == "us" else {
                     self.status.stringValue = "Account changed, WoW opened, or build metadata was unavailable. No connection made."; return
                 }
-                let friends = try await NativeGameAccounts().friends(token: token, build: UInt64(version.buildID), region: .us, protocolVersion: .currentClientCall)
+                let report = try await NativeGameAccounts().sessionDiagnostics(token: token, build: UInt64(version.buildID), region: .us)
                 try Task.checkCancellation()
                 guard AccountList.load(from: self.defaults).activeID == account.id else { self.status.stringValue = "Account changed; result discarded."; return }
-                self.output.string = friends.enumerated().map { $0.element.battleTag ?? "Friend \($0.offset + 1) — BattleTag unavailable" }.joined(separator: "\n")
-                self.status.stringValue = "Client-call control returned \(friends.count) friends. Connection closed."
+                func yesNo(_ value: Bool?) -> String { value.map { $0 ? "yes" : "no" } ?? "not reported / unknown" }
+                self.output.string = [
+                    "Bindless RPC accepted: \(yesNo(report.bindlessAccepted))",
+                    "Connection identity field present: \(yesNo(report.connectionIdentityPresent))",
+                    "Logon BattleTag field present: \(yesNo(report.logonBattleTagPresent))",
+                    "Logon game-account field present: \(yesNo(report.logonGameAccountPresent))",
+                    "Logon session-key field present: \(yesNo(report.logonSessionKeyPresent))",
+                    "Existing-session query status: \(report.sessionQueryStatus)",
+                    "Server session identity returned: \(yesNo(report.serverSessionIDPresent))",
+                ].joined(separator: "\n")
+                self.status.stringValue = "Session diagnostics complete. No session creation request sent; connection closed."
             } catch is CancellationError { self.status.stringValue = "Cancelled. No saved login changed." }
-            catch FriendSnapshotFailure.requestRejected(let code) {
-                let reason = code == 3025 ? "RPC method disabled" : "request refused"
-                self.status.stringValue = "Signed in successfully; friends lookup failed: \(reason) (\(code)). Saved login unchanged."
-            }
-            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Connection/authentication refused (status \(code)); friends lookup was not completed. Saved login unchanged." }
+            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Connection/authentication refused (status \(code)); session-state query was not completed. Saved login unchanged." }
             catch NativeGameAccounts.Failure.owner { self.status.stringValue = "Account identity mismatch. Result discarded." }
-            catch { self.status.stringValue = "Could not complete the snapshot. The service or this login may not support it. Saved login unchanged." }
+            catch { self.status.stringValue = "Could not complete session diagnostics. Saved login unchanged." }
         }
     }
     @objc private func cancelRead() { task?.cancel(); output.string = "" }

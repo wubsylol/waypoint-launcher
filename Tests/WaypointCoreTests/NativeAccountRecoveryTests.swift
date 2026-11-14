@@ -243,3 +243,41 @@ private func legacyFriend(_ low: UInt64) -> Data {
     headers[0].removeValue(forKey: 2); headers[1].removeValue(forKey: 2)
     #expect(headers[0] == headers[1])
 }
+
+
+private func diagnosticReplies(queryBody: Data, owner: UInt64 = 123) -> [Data] {
+    [accountFrame(token: 0, body: BGSWire.number(7, 1) + BGSWire.text(9, "synthetic-connection-id")), accountFrame(token: 1),
+     accountFrame(token: 99, body: BGSWire.bytes(2, BGSWire.number(1, owner) + BGSWire.text(3, "Synthetic#1234") + BGSWire.bytes(5, Data([1,2,3]))), service: 0, method: 1, hash: 0x9da8116b),
+     accountFrame(token: 2, body: queryBody)]
+}
+@Test @MainActor func sessionDiagnosticsReadsExistingStateWithoutSessionMutation() async throws {
+    let state = BGSWire.bytes(1, BGSWire.bytes(1, BGSWire.number(1, 123)))
+    let transport = AccountTestTransport(diagnosticReplies(queryBody: state).reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us)
+    #expect(report.bindlessAccepted == true); #expect(report.connectionIdentityPresent)
+    #expect(report.logonBattleTagPresent); #expect(report.logonSessionKeyPresent); #expect(!report.logonGameAccountPresent)
+    #expect(report.sessionQueryStatus == 0); #expect(report.serverSessionIDPresent == true)
+    #expect(transport.cancelled); #expect(transport.written.count == 3)
+    let packet = try #require(transport.written.last), prefix = [UInt8](packet.prefix(2))
+    let length = Int(prefix[0]) * 256 + Int(prefix[1]), header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+    #expect(try BGSWire.uint(header, 11) == 0x7b37d770); #expect(try BGSWire.uint(header, 2) == 5)
+    #expect(packet.dropFirst(2 + length).isEmpty)
+}
+@Test @MainActor func sessionDiagnosticsRefusalDoesNotClaimNoExistingSession() async throws {
+    var replies = diagnosticReplies(queryBody: Data())
+    let header = BGSWire.number(1, 254) + BGSWire.number(3, 2) + BGSWire.number(5, 0) + BGSWire.number(6, 3025)
+    replies[3] = Data([UInt8(header.count >> 8), UInt8(header.count & 255)]) + header
+    let transport = AccountTestTransport(replies.reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us)
+    #expect(report.sessionQueryStatus == 3025); #expect(report.serverSessionIDPresent == nil)
+    #expect(report.connectionIdentityPresent); #expect(transport.cancelled)
+}
+@Test @MainActor func sessionDiagnosticsRejectsAnotherOwnersSession() async {
+    let state = BGSWire.bytes(1, BGSWire.bytes(1, BGSWire.number(1, 999)))
+    let transport = AccountTestTransport(diagnosticReplies(queryBody: state).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Accepted another owner's session metadata")
+    } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled) }
+    catch { Issue.record("Expected session owner mismatch") }
+}

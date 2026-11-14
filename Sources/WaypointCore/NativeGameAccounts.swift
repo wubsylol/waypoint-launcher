@@ -17,7 +17,12 @@ public final class NativeGameAccounts {
             }
         }
     }
+    private enum ReplyKind { case native, friends, sessionDiagnostic }
     private typealias W = BGSWire
+    private var recordsDiagnostics = false
+    private var diagnostics = NativeSessionDiagnostics(bindlessAccepted: nil, connectionIdentityPresent: false,
+        logonBattleTagPresent: false, logonGameAccountPresent: false, logonSessionKeyPresent: false,
+        sessionQueryStatus: 0, serverSessionIDPresent: nil)
     private let transport: any NativeAccountTransport
     private let timeout: Duration
     private var sequence: UInt64 = 1
@@ -45,9 +50,18 @@ public final class NativeGameAccounts {
             try Task.checkCancellation()
             try await transport.connect()
             try await send(service: 0, method: 1, token: 0, body: W.number(3, 1))
-            let (header, _) = try await receive()
+            let (header, connectionReply) = try await receive()
             guard try W.uint(header, 1) == 254, try W.uint(header, 3) == 0,
                   try W.uint(header, 6, default: 0) == 0 else { throw Failure.unavailable }
+            if recordsDiagnostics {
+                let connection = try W.decode(connectionReply)
+                if connection[7] != nil {
+                    let accepted = try W.uint(connection, 7)
+                    guard accepted <= 1 else { throw Failure.unavailable }
+                    diagnostics.bindlessAccepted = accepted == 1
+                }
+                if connection[9] != nil { diagnostics.connectionIdentityPresent = !(try W.data(connection, 9)).isEmpty }
+            }
             let request = W.number(1, 5_730_135) + W.text(2, "Mc64") + W.text(3, "enUS")
                 + W.number(4, build) + W.bytes(10, W.text(1, token.value))
             _ = try await call(hash: 0xc02f8216, method: 1, body: request)
@@ -98,11 +112,11 @@ public final class NativeGameAccounts {
                 // Connection-scoped listener object 1. The initial subscription
                 // response contains the list in field 5; close immediately after
                 // parsing it. Never keep a social subscription in the launcher.
-                let response = try await call(hash: 0xa3ddb1bd, method: 1, body: W.number(2, 1), isFriendsRequest: true)
+                let response = try await call(hash: 0xa3ddb1bd, method: 1, body: W.number(2, 1), replyKind: .friends)
                 return try LegacyFriendSnapshot.decode(response, friendsField: 5)
             }
             if protocolVersion == .legacy {
-                let response = try await call(hash: 0xa3ddb1bd, method: 13, isFriendsRequest: true)
+                let response = try await call(hash: 0xa3ddb1bd, method: 13, replyKind: .friends)
                 return try LegacyFriendSnapshot.decode(response)
             }
             var result: [BattleNetFriend] = [], seenIDs = Set<String>(), continuations = Set<UInt64>()
@@ -111,7 +125,7 @@ public final class NativeGameAccounts {
                 let request = continuation == 0 ? Data() : W.number(2, continuation)
                 // Explicit control: only the method's client-call bit changes.
                 let method: UInt64 = protocolVersion == .currentClientCall ? 0x40000005 : 5
-                let response = try await call(hash: 0x5869be8c, method: method, body: request, isFriendsRequest: true)
+                let response = try await call(hash: 0x5869be8c, method: method, body: request, replyKind: .friends)
                 let page = try FriendSnapshotPage.decode(response)
                 for friend in page.friends {
                     guard seenIDs.insert(friend.id).inserted, result.count < 1000 else { throw Failure.unavailable }
@@ -126,6 +140,32 @@ public final class NativeGameAccounts {
             throw Failure.unavailable
         }
     }
+    /// Read-only connection metadata plus GetSessionState. Sends no session
+    /// creation, restoration, destruction or mark-alive request.
+    public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region) async throws -> NativeSessionDiagnostics {
+        recordsDiagnostics = true
+        return try await authenticated(token: token, build: build, region: region) {
+            do {
+                let reply = try await call(hash: 0x7b37d770, method: 5, replyKind: .sessionDiagnostic)
+                let response = try W.decode(reply)
+                diagnostics.serverSessionIDPresent = false
+                if response[1] != nil {
+                    let state = try W.decode(W.data(response, 1))
+                    if state[1] != nil {
+                        let identity = try W.decode(W.data(state, 1))
+                        guard try W.uint(identity, 1) == expectedOwner else { throw Failure.owner }
+                        diagnostics.serverSessionIDPresent = true
+                    }
+                }
+                diagnostics.sessionQueryStatus = 0
+            } catch SessionDiagnosticRefusal.response(let code) {
+                diagnostics.sessionQueryStatus = code
+                diagnostics.serverSessionIDPresent = nil
+            }
+            return diagnostics
+        }
+    }
+
     private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil) async throws {
         try Task.checkCancellation()
         guard !closed, body.count <= 1_048_576 else { throw Failure.unavailable }
@@ -156,7 +196,7 @@ public final class NativeGameAccounts {
         guard size <= 1_048_576 else { throw Failure.unavailable }
         return (header, try await exact(Int(size)))
     }
-    private func call(hash: UInt32, method: UInt64, body: Data = Data(), isFriendsRequest: Bool = false) async throws -> Data {
+    private func call(hash: UInt32, method: UInt64, body: Data = Data(), replyKind: ReplyKind = .native) async throws -> Data {
         let token = sequence; sequence += 1
         try await send(service: 0, method: method, token: token, body: body, hash: hash)
         while true {
@@ -165,8 +205,11 @@ public final class NativeGameAccounts {
                 guard try W.uint(header, 3) == token else { throw Failure.unavailable }
                 let status = try W.uint(header, 6, default: 0)
                 guard status == 0 else {
-                    if isFriendsRequest { throw FriendSnapshotFailure.requestRejected(status) }
-                    throw Failure.rejected(status)
+                    switch replyKind {
+                    case .friends: throw FriendSnapshotFailure.requestRejected(status)
+                    case .sessionDiagnostic: throw SessionDiagnosticRefusal.response(status)
+                    case .native: throw Failure.rejected(status)
+                    }
                 }
                 return response
             }
@@ -182,6 +225,11 @@ public final class NativeGameAccounts {
             guard status == 0 else { throw Failure.rejected(status) }
             let record = try W.decode(W.data(message, 2))
             guard try W.uint(record, 1) == expectedOwner else { throw Failure.owner }
+            if recordsDiagnostics {
+                if record[3] != nil { diagnostics.logonBattleTagPresent = !(try W.data(record, 3)).isEmpty }
+                if record[2] != nil { diagnostics.logonGameAccountPresent = !(try W.data(record, 2)).isEmpty }
+                if record[5] != nil { diagnostics.logonSessionKeyPresent = !(try W.data(record, 5)).isEmpty }
+            }
             loggedIn = true
         case 2:
             let state = try W.decode(W.data(W.decode(body), 1))

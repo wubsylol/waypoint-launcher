@@ -182,3 +182,22 @@ for GetFriends with method0x40000005. This differs from the raw method5 refusal
 3025. The flag variant is not a fix and should not replace raw methods. No
 session was created and no friend list returned. Download processes were left
 alone. Stop using flagged methods unless further wire evidence supports them.
+
+## Read-only session diagnostics (version 0.0.6)
+
+After the failed flag control, the next mode returns only metadata-presence
+booleans and a correlated GetSessionState status. It records ConnectResponse
+bindless acceptance7/CIID9 presence, and owner-verified LogonRecord BattleTag3,
+game_account2 and session_key5 presence. It never exposes those actual values.
+
+It then calls only SessionService GetSessionState (original hash0x7B37D770,
+raw method5, empty body). No friends RPC, CreateSession, RestoreSession,
+DestroySession, MarkSessionAlive, presence update or subscription is requested.
+Session-query refusals retain their status and unknown session existence; they
+are distinct from authentication/listener failure. If a session ID is returned,
+its account owner is checked before any summary is displayed. No identifiers,
+keys, account names or raw replies are displayed or written. A query refusal is
+not evidence that the user has no other sessions. The transport closes normally.
+
+23 targeted native/probe checks pass, including exact read-only dispatch,
+refusal handling and a wrong-owner response. Live result recorded separately.
