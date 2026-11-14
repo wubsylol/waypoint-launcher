@@ -6,6 +6,7 @@ import WaypointCore
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate, NSMenuItemValidation {
     let model = AppModel()
     let appUpdater = AppUpdater()
+    let backgroundServices = BackgroundServices()
     private var libraryWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var menuBarItem: MenuBarItem?
@@ -24,7 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let delegate = AppDelegate()
         app.delegate = delegate
         // Also makes `swift run` builds, which have no bundle, a regular app.
-        app.setActivationPolicy(.regular)
+        let menuOnly = UserDefaults.standard.bool(forKey: UpdatePreferences.hideDockKey) &&
+            UserDefaults.standard.bool(forKey: MenuBarItem.defaultsKey)
+        app.setActivationPolicy(menuOnly ? .accessory : .regular)
         withExtendedLifetime(delegate) { app.run() }
     }
 
@@ -32,10 +35,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         appUpdater.prepareForRestart = { [weak model] in await model?.prepareToQuit() ?? true }
         NSApp.mainMenu = MainMenu.make(for: self)
         menuBarItem = MenuBarItem(model: model, appUpdater: appUpdater)
-        showLibrary(nil)
+        backgroundServices.openLibrary = { [weak self] in self?.showLibrary(nil) }
+        backgroundServices.openAppUpdate = { [weak self] in self?.showLibrary(nil) }
+        backgroundServices.start(model: model, updater: appUpdater)
+        if !UserDefaults.standard.bool(forKey: UpdatePreferences.hideDockKey), !Self.launchedAtLogin {
+            showLibrary(nil)
+        }
         // How long the launch took, to compare versions and Macs by the logs.
-        Log.info(.app, "library_shown", nil, ["launch_ms": ProcessStart.millisecondsAgo ?? -1, "games": model.games.count])
+        Log.info(.app, "interface_ready", nil, ["launch_ms": ProcessStart.millisecondsAgo ?? -1, "games": model.games.count])
     }
+
+    private static var launchedAtLogin: Bool {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        return event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+    }
+
+    func applicationWillTerminate(_ notification: Notification) { backgroundServices.stop() }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard model.hasActiveDownloads || isTerminating else { return .terminateNow }
@@ -63,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func showLibrary(_ sender: Any?) {
         let window = libraryWindow ?? makeLibraryWindow()
         libraryWindow = window
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -96,11 +112,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc func showSettings(_ sender: Any?) {
-        let window = settingsWindow ?? NSWindow(contentViewController: SettingsViewController(model: model))
+        let window = settingsWindow ?? NSWindow(contentViewController: SettingsViewController(model: model, backgroundServices: backgroundServices))
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         if settingsWindow == nil { window.center() }
         settingsWindow = window
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -170,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         for item in menu.items {
             switch item.action {
             case #selector(checkForUpdates(_:)):
-                item.isHidden = ready != nil || !appUpdater.isEnabled
+                item.isHidden = ready != nil
             case #selector(restartToUpdate(_:)):
                 item.isHidden = ready == nil
                 item.title = "Restart to Update Waypoint \(ready ?? "")"
@@ -190,7 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(checkForUpdates(_:)): appUpdater.canCheck
+        case #selector(checkForUpdates(_:)): true
         case #selector(addAccount(_:)), #selector(signInAgain(_:)), #selector(signOut(_:)): !model.isSigningIn
         default: true
         }

@@ -117,7 +117,8 @@ final class AppModel {
     private(set) var running: Set<String> = []
     /// Game uid -> result of the last update check.
     private(set) var updates: [String: UpdateCheck] = [:]
-    private var lastUpdateCheck: Date?
+    @ObservationIgnored private var updateCheckSchedule = UpdateCheckSchedule()
+    @ObservationIgnored var updateChecked: ((Game, UpdateCheck) -> Void)?
 
     /// nil = use the region each game was installed for.
     var regionOverride: Region? {
@@ -260,7 +261,7 @@ final class AppModel {
         })
         Task {
             await refreshCatalog()
-            await checkForUpdates(force: true)
+            await checkForUpdates()
         }
         Task { await setUpAccounts() }
     }
@@ -443,18 +444,26 @@ final class AppModel {
     /// Asks Blizzard's version service which build is live. Cheap (one small
     /// request per game), throttled to every 15 minutes unless forced.
     func checkForUpdates(force: Bool = false) async {
-        if !force, let last = lastUpdateCheck, Date().timeIntervalSince(last) < 15 * 60 { return }
-        lastUpdateCheck = Date()
-        for game in discoveredGames where (game.family != .other || GameUpdate.canUpdate(game.install)) && game.isInstalled {
-            do {
-                let check = try await GameUpdate(install: game.install).check()
-                updates[game.id] = check
-                Log.info(.gameUpdate, "checked", nil, ["uid": game.id, "installed": game.install.version ?? "?",
-                                                       "latest": check.latest.name, "update_available": check.isUpdateAvailable])
-            } catch {
-                Log.warning(.gameUpdate, "check_failed", nil, ["uid": game.id, "error": error])
+        guard !isPreparingToQuit,
+              updateCheckSchedule.request(force: force, automatic: UpdatePreferences.automatic()) else { return }
+        defer { updateCheckSchedule.cancel() }
+        repeat {
+            for game in discoveredGames where (game.family != .other || GameUpdate.canUpdate(game.install)) && game.isInstalled {
+                do {
+                    let check = try await GameUpdate(install: game.install).check()
+                    // A scan, uninstall or download can finish while the request is in flight.
+                    guard !isPreparingToQuit, let current = discoveredGames.first(where: { $0.id == game.id }),
+                          current.isInstalled, current.install.version == game.install.version,
+                          current.install.buildConfig == game.install.buildConfig else { continue }
+                    updates[game.id] = check
+                    if downloads[game.id] == nil { updateChecked?(current, check) }
+                    Log.info(.gameUpdate, "checked", nil, ["uid": game.id, "installed": game.install.version ?? "?",
+                                                           "latest": check.latest.name, "update_available": check.isUpdateAvailable])
+                } catch {
+                    Log.warning(.gameUpdate, "check_failed", nil, ["uid": game.id, "error": error])
+                }
             }
-        }
+        } while updateCheckSchedule.complete() && !isPreparingToQuit
     }
 
     /// Downloads and installs the latest build; with `verify`, re-checks

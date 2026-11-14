@@ -1,0 +1,13 @@
+# Background updates and macOS integration
+
+Settings contains automatic checks, update notifications, menu-bar visibility, Dock visibility, and Start at login. Menu bar, hidden Dock, notifications, and login startup remain opt-in. Hiding the Dock explicitly enables the menu bar. Removing or disabling the menu-bar item restores regular Dock presence. A normal icon click opens the library. Right-click or Control-click opens the quick-action menu, including Settings and Quit.
+
+While Waypoint is running, installed-game version metadata is checked on startup, activation, wake, and a 30-minute timer (15-minute minimum spacing except explicit/installation-completion checks). Checks coalesce concurrent requests and queue a forced follow-up after a completed download. These checks do not authenticate or alter any game files. Offline errors keep the last known result and retry on a later check.
+
+Personal builds do not check for Waypoint releases and have no Sparkle feed. Upstream’s separately configured Sparkle updater is preserved, including its own check/install schedule. BackgroundServices does not poll Sparkle. The automatic-check setting in this personal build controls installed-game checks. Explicit Check for Updates checks games (and Sparkle only in builds that already have a feed).
+
+Native notifications use UserNotifications. Request authorization only after enabling the checkbox. Deduplication records the last successfully scheduled build for each game identity (including edition/platform) and, in upstream feed-enabled builds, Waypoint’s update build in local preferences. Permission denial/scheduling failure does not consume an alert. Notification bodies include only game names and versions; no account identity or login information. Clicking opens the library. Disabling alerts removes existing Waypoint notifications.
+
+Start at login uses SMAppService.mainApp, not a custom LaunchAgent. Settings reflects enabled/requiresApproval/notRegistered/notFound and offers the system Login Items page when approval is required. Unbundled `swift run` builds disable login-item and notification controls because Notification Center requires an actual application bundle.
+
+A real logout/reboot is intentionally not performed during automated validation. Verify login startup at the next convenient login; macOS can independently disable items or notifications. Closing the library leaves Waypoint running, but Quit stops periodic checks.
