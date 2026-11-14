@@ -1283,7 +1283,7 @@ final class AppModel {
 
     /// Preview only: issue fresh target authorization; never cache a generated
     /// ticket with an unmeasured lifetime or replace the source account/session.
-    private func sharedDiabloAuthorization(account: Account, region: Region) async -> LoginToken? {
+    private func sharedGameAuthorization(account: Account, region: Region, target: NativeGameAccounts.CredentialTarget) async -> LoginToken? {
         do {
             guard region == .us else { throw NativeGameAccounts.Failure.unsupported }
             guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
@@ -1300,15 +1300,15 @@ final class AppModel {
             guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
                 throw NativeGameAccounts.Failure.gameRunning
             }
-            let issued = try await NativeGameAccounts().requestCredential(token: source, build: UInt64(version.buildID), region: region)
+            let issued = try await NativeGameAccounts().requestCredential(token: source, build: UInt64(version.buildID), region: region, target: target)
             guard !Task.isCancelled, accountList[account.id] != nil, issued.accountID == account.id else { return nil }
-            Log.info(.auth, "shared_authorization_issued", nil, ["source": "WoW", "target": "Fen"])
+            Log.info(.auth, "shared_authorization_issued", nil, ["source": "WoW", "target": target.codename])
             return issued
         } catch {
             guard !Task.isCancelled else { return nil }
             Log.warning(.auth, "shared_authorization_failed")
             let alert = NSAlert(); alert.messageText = "Shared sign-in test could not continue"
-            alert.informativeText = "This preview requires a saved WoW login for this Battle.net account, the Americas region, and all Blizzard games closed on every device. Your saved logins were kept. No existing Diablo IV login was used as a fallback."
+            alert.informativeText = "This preview requires a saved WoW login for this Battle.net account, the Americas region, and all Blizzard games closed on every device. Your saved logins were kept. No existing \(target.displayName) login was used as a fallback."
             alert.runModal(); return nil
         }
     }
@@ -1329,10 +1329,10 @@ final class AppModel {
         // Nothing is refreshed first: Battle.net's login page keeps no session
         // that signs in again without the form, and a token lasts for months.
         // Explicit test builds prove the exchange instead of accidentally using
-        // a previously cached Fen ticket. Production builds do not enter here.
+        // a previously cached target ticket. Production builds do not enter here.
         if Bundle.main.object(forInfoDictionaryKey: "WaypointSharedSignInPreview") as? Bool == true,
-           !forceSignIn, plan.codename == "Fen", let account {
-            return await sharedDiabloAuthorization(account: account, region: plan.region)
+           !forceSignIn, let target = NativeGameAccounts.CredentialTarget(previewCodename: plan.codename), let account {
+            return await sharedGameAuthorization(account: account, region: plan.region, target: target)
         }
         if !forceSignIn, let account, let token = tokenVault.token(account: account.id, codename: plan.codename) {
             Log.info(.auth, "token", nil, ["source": "keychain", "codename": plan.codename])

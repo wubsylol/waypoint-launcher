@@ -71,8 +71,24 @@ public final class NativeGameAccounts {
     /// Experimental v2 GenerateAuthToken request; never used by normal launches.
     /// Schema/method verified against installed Forever static descriptors.
     public enum CredentialTarget: Sendable {
-        case worldOfWarcraft, diabloIV
-        var titleID: UInt64 { self == .worldOfWarcraft ? 0x576f57 : 0x46656e }
+        case worldOfWarcraft, diabloIV, hearthstone
+        var titleID: UInt64 {
+            switch self { case .worldOfWarcraft: 0x576f57; case .diabloIV: 0x46656e; case .hearthstone: 0x57544347 }
+        }
+        public var displayName: String {
+            switch self { case .worldOfWarcraft: "World of Warcraft"; case .diabloIV: "Diablo IV"; case .hearthstone: "Hearthstone" }
+        }
+        public var codename: String {
+            switch self { case .worldOfWarcraft: "WoW"; case .diabloIV: "Fen"; case .hearthstone: "WTCG" }
+        }
+        public var productCode: String {
+            switch self { case .worldOfWarcraft: "wowf"; case .diabloIV: "fenris"; case .hearthstone: "hsb" }
+        }
+        var platform: String { self == .diabloIV ? "Wn64" : "Mc64" }
+        /// Only these cross-game routes are enabled in the real-launch preview.
+        public init?(previewCodename: String) {
+            switch previewCodename { case "Fen": self = .diabloIV; case "WTCG": self = .hearthstone; default: return nil }
+        }
     }
     public func requestCredential(token: LoginToken, build: UInt64, region: Region,
                                   target: CredentialTarget = .diabloIV) async throws -> LoginToken {
@@ -86,9 +102,9 @@ public final class NativeGameAccounts {
     }
 
     /// Isolated target-service acceptance check; no game licence/session selection.
-    public func validateDiabloIVCredential(token: LoginToken, build: UInt64, region: Region) async throws {
+    public func validateCredential(token: LoginToken, build: UInt64, region: Region, target: CredentialTarget) async throws {
         try await withAuthenticatedSession(token: token, build: build, region: region,
-                                           titleID: 0x46656e, platform: "Wn64") {
+                                           titleID: target.titleID, platform: target.platform) {
             guard authenticatedProfile?.accountID == token.accountID else { throw Failure.owner }
         }
     }

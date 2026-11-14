@@ -97,3 +97,26 @@ with the existing runtime metadata and disabled self-updates. It does not instal
 the preview or merge the experiment into main. The user currently has no Diablo IV
 installation available for the real-game test; installation and actual sign-in
 acceptance remain pending. See the included PREVIEW-INSTRUCTIONS.md.
+
+## Hearthstone extension
+
+Revision 2 adds Hearthstone as the smaller native cross-game sign-in test.
+Target `WTCG` is title 0x57544347; its regional version product is `hsb` and
+its probe platform is `Mc64`. The explicit preview allowlist now contains
+`WTCG` and `Fen` only; ordinary WoW and all other families retain their existing
+login behavior. The diagnostic popup defaults to Hearthstone.
+
+Synthetic tests check issuance title, target Mac platform/build and the preview
+allowlist. Hearthstone’s free-to-play availability does not demonstrate paid
+ownership; this stage tests only cross-game authorization.
+
+Hearthstone uses the existing encrypted native launch-options handoff, while
+Diablo IV uses the existing Windows handoff. Neither generated credential is
+cached in the token vault or adopted as the account’s web session. Normal game
+handoffs can persist data, so “not cached” does not mean no disk writes.
+
+Live Hearthstone check passed: saved WoW authorization issued an owner-matched
+WTCG credential, and a subsequent Hearthstone native Logon using the current
+public `hsb` build returned the expected owner. No new sign-in page was required.
+The diagnostic discarded its tickets and did not launch or install Hearthstone.
+Actual Hearthstone main-menu acceptance remains pending.

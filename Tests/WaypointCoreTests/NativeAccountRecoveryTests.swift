@@ -195,7 +195,7 @@ private func nativeProfileReplies(tag: String? = "Example#1234", owner: UInt64 =
 
 @Test @MainActor func nativeTargetValidationUsesTargetTitleAndWindowsPlatform() async throws {
     let transport = AccountTestTransport(nativeProfileReplies().reduce(Data(), +))
-    try await NativeGameAccounts(transport: transport).validateDiabloIVCredential(token: accountTestToken, build: 123456, region: .us)
+    try await NativeGameAccounts(transport: transport).validateCredential(token: accountTestToken, build: 123456, region: .us, target: .diabloIV)
     let packet = transport.sentPackets[1]
     let size = Int(packet[0]) * 256 + Int(packet[1])
     let body = try BGSWire.decode(Data(packet.dropFirst(2 + size)))
@@ -203,4 +203,27 @@ private func nativeProfileReplies(tag: String? = "Example#1234", owner: UInt64 =
     #expect(try BGSWire.data(body, 2) == Data("Wn64".utf8))
     #expect(try BGSWire.uint(body, 4) == 123456)
     #expect(transport.sends == 2); #expect(transport.cancelled)
+}
+
+@Test @MainActor func nativeHearthstoneExchangeAndValidationUseDistinctTitleAndMacPlatform() async throws {
+    let issued = "US-fedcba9876543210fedcba9876543210-123"
+    let exchange = AccountTestTransport((nativeProfileReplies() + [accountFrame(token: 2, body: BGSWire.text(1, issued))]).reduce(Data(), +))
+    let token = try await NativeGameAccounts(transport: exchange).requestCredential(token: accountTestToken, build: 70938, region: .us, target: .hearthstone)
+    let packet = try #require(exchange.sentPackets.last)
+    let headerSize = Int(packet[0]) * 256 + Int(packet[1])
+    #expect(try BGSWire.uint(BGSWire.decode(Data(packet.dropFirst(2 + headerSize))), 1) == 0x57544347)
+    let validation = AccountTestTransport(nativeProfileReplies().reduce(Data(), +))
+    try await NativeGameAccounts(transport: validation).validateCredential(token: token, build: 98765, region: .us, target: .hearthstone)
+    let logon = validation.sentPackets[1], size = Int(logon[0]) * 256 + Int(logon[1])
+    let body = try BGSWire.decode(Data(logon.dropFirst(2 + size)))
+    #expect(try BGSWire.uint(body, 1) == 0x57544347)
+    #expect(try BGSWire.data(body, 2) == Data("Mc64".utf8))
+    #expect(validation.sends == 2); #expect(validation.cancelled); #expect(exchange.cancelled)
+}
+@Test func sharedPreviewOnlyRoutesExplicitlySupportedCrossGameTargets() {
+    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "WTCG") == .hearthstone)
+    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "Fen") == .diabloIV)
+    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "WoW") == nil)
+    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "Pro") == nil)
+    #expect(NativeGameAccounts.CredentialTarget.hearthstone.productCode == "hsb")
 }

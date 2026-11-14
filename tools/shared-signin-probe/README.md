@@ -9,8 +9,8 @@ launch configuration; ordinary Waypoint startup is unchanged.
 The browser button tries existing owner-scoped cookies without submitting a
 password. Native buttons read the selected owner's saved WoW token from its
 normal Keychain item, authenticate it with Blizzard, then make one credential
-issuance request. The separate validation button also authenticates the
-result against the Diablo IV title. No returned ticket is saved or launched.
+issuance request. The target popup defaults to Hearthstone. The separate validation button also authenticates the
+result against the selected Hearthstone or Diablo IV title. No returned ticket is saved or launched.
 
 Close all Blizzard games on all Macs first. If macOS asks for Keychain access,
 verify the requested service is the personal Waypoint Battle.net login-token
