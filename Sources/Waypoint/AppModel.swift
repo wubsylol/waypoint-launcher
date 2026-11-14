@@ -1281,6 +1281,38 @@ final class AppModel {
         }
     }
 
+    /// Preview only: issue fresh target authorization; never cache a generated
+    /// ticket with an unmeasured lifetime or replace the source account/session.
+    private func sharedDiabloAuthorization(account: Account, region: Region) async -> LoginToken? {
+        do {
+            guard region == .us else { throw NativeGameAccounts.Failure.unsupported }
+            guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+                throw NativeGameAccounts.Failure.gameRunning
+            }
+            guard let source = tokenVault.token(account: account.id, codename: "WoW"), source.accountID == account.id else {
+                throw NativeGameAccounts.Failure.owner
+            }
+            let config = URLSessionConfiguration.ephemeral
+            config.waitsForConnectivity = false; config.timeoutIntervalForRequest = 10; config.timeoutIntervalForResource = 20
+            let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+            let version = try await VersionService(session: session).latest(product: "wowf", region: .us)
+            guard version.buildID > 0, !Task.isCancelled, accountList[account.id] != nil else { return nil }
+            guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+                throw NativeGameAccounts.Failure.gameRunning
+            }
+            let issued = try await NativeGameAccounts().requestCredential(token: source, build: UInt64(version.buildID), region: region)
+            guard !Task.isCancelled, accountList[account.id] != nil, issued.accountID == account.id else { return nil }
+            Log.info(.auth, "shared_authorization_issued", nil, ["source": "WoW", "target": "Fen"])
+            return issued
+        } catch {
+            guard !Task.isCancelled else { return nil }
+            Log.warning(.auth, "shared_authorization_failed")
+            let alert = NSAlert(); alert.messageText = "Shared sign-in test could not continue"
+            alert.informativeText = "This preview requires a saved WoW login for this Battle.net account, the Americas region, and all Blizzard games closed on every device. Your saved logins were kept. No existing Diablo IV login was used as a fallback."
+            alert.runModal(); return nil
+        }
+    }
+
     /// The account's token for the game, from the keychain. Without one (or
     /// when forced), signs in once with the saved password when opted in, then
     /// opens the login window; a rejected saved login goes to the interactive
@@ -1296,6 +1328,12 @@ final class AppModel {
         // "Closed" and Waypoint can't tell, so it would keep handing it over.
         // Nothing is refreshed first: Battle.net's login page keeps no session
         // that signs in again without the form, and a token lasts for months.
+        // Explicit test builds prove the exchange instead of accidentally using
+        // a previously cached Fen ticket. Production builds do not enter here.
+        if Bundle.main.object(forInfoDictionaryKey: "WaypointSharedSignInPreview") as? Bool == true,
+           !forceSignIn, plan.codename == "Fen", let account {
+            return await sharedDiabloAuthorization(account: account, region: plan.region)
+        }
         if !forceSignIn, let account, let token = tokenVault.token(account: account.id, codename: plan.codename) {
             Log.info(.auth, "token", nil, ["source": "keychain", "codename": plan.codename])
             return token

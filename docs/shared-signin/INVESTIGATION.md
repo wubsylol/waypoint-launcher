@@ -75,3 +75,25 @@ that packaging error. No game or saved authorization was affected.
 - Current method and field facts were read only from static authentication
   descriptors in the installed Forever client. No account files, process
   memory, private credential values or official launcher secrets were inspected.
+
+## Real-launch preview (pending game test)
+
+The source branch includes an explicit `WaypointSharedSignInPreview` bundle
+flag. Ordinary bundles omit it and keep normal login behavior. Preview bundles
+use the WoW→Fen exchange on non-forced Diablo IV Play before considering any
+cached Fen ticket; a missing source or failed exchange stops rather than
+silently signing in through a different path. Explicit Sign In Again remains
+the existing deliberate interactive path and is not a successful shared test.
+
+The preview uses generated authorization only in memory for the normal Windows
+launch handoff. It does not adopt the ticket, save it in Keychain, replace the
+WoW token or rotate the account web session. A generated ticket's lifetime has
+not been measured, so the preview obtains a fresh one on each launch. It is
+Americas/WoW→Diablo IV only; general cross-title/region support remains unproven.
+
+Build `tools/shared-signin-probe/build-preview.sh` from a clean, reviewed commit.
+It creates an Apple silicon ZIP and checksum in outputs/previews/shared-sign-in,
+with the existing runtime metadata and disabled self-updates. It does not install
+the preview or merge the experiment into main. The user currently has no Diablo IV
+installation available for the real-game test; installation and actual sign-in
+acceptance remain pending. See the included PREVIEW-INSTRUCTIONS.md.
