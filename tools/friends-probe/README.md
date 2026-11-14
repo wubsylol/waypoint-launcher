@@ -148,3 +148,14 @@ point. Investigate the current social client authentication and service path
 before any next network experiment. Running-game coexistence remains untested.
 
 19 targeted synthetic/native regression checks passed for version 0.0.4.
+
+
+## Offline social/auth investigation
+
+See [the research report](../../docs/social-service/INVESTIGATION.md) and
+[metadata inventory](../../docs/social-service/client-17987-metadata.json) for
+the installed client’s current protocol/session findings and an ordered live
+plan. `offline/inspect_protocol.py` and its tests have no network/authentication
+code and do not require a sign-in. No additional live test was run for that
+report. In particular, the client-call flag, identity headers and application
+session are still unverified hypotheses, not implemented fixes.

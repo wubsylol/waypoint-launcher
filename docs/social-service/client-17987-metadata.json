@@ -1,0 +1,4366 @@
+{
+  "binary": "battle.net-core",
+  "binarySHA256": "37a9047c1dc85337f62c7143a50c8dc7ff67ccc428b7484766542c3bac48c9ed",
+  "binaryBytes": 43451520,
+  "files": [
+    {
+      "file": "bgs/low/pb/client/rpc_types.proto",
+      "offset": "0x23d95ac",
+      "bytes": 1194,
+      "package": "bgs.protocol",
+      "messages": [
+        {
+          "name": "NO_RESPONSE",
+          "fields": []
+        },
+        {
+          "name": "Address",
+          "fields": [
+            {
+              "name": "address",
+              "number": 1,
+              "label": 2,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "port",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "ProcessId",
+          "fields": [
+            {
+              "name": "label",
+              "number": 1,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "epoch",
+              "number": 2,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "ObjectAddress",
+          "fields": [
+            {
+              "name": "host",
+              "number": 1,
+              "label": 2,
+              "type": 11,
+              "typeName": ".bgs.protocol.ProcessId"
+            },
+            {
+              "name": "object_id",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "NoData",
+          "fields": []
+        },
+        {
+          "name": "ErrorInfo",
+          "fields": [
+            {
+              "name": "object_address",
+              "number": 1,
+              "label": 2,
+              "type": 11,
+              "typeName": ".bgs.protocol.ObjectAddress"
+            },
+            {
+              "name": "status",
+              "number": 2,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "service_hash",
+              "number": 3,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "method_id",
+              "number": 4,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "FanoutTarget",
+          "fields": [
+            {
+              "name": "client_id",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "key",
+              "number": 2,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "object_id",
+              "number": 3,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "Header",
+          "fields": [
+            {
+              "name": "service_id",
+              "number": 1,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "method_id",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "token",
+              "number": 3,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "object_id",
+              "number": 4,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "size",
+              "number": 5,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "status",
+              "number": 6,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "error",
+              "number": 7,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.ErrorInfo"
+            },
+            {
+              "name": "timeout",
+              "number": 8,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "is_response",
+              "number": 9,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "forward_targets",
+              "number": 10,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.ProcessId"
+            },
+            {
+              "name": "service_hash",
+              "number": 11,
+              "label": 1,
+              "type": 7,
+              "typeName": null
+            },
+            {
+              "name": "client_id",
+              "number": 13,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "fanout_target",
+              "number": 14,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.FanoutTarget"
+            },
+            {
+              "name": "client_id_fanout_target",
+              "number": 15,
+              "label": 3,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "client_record",
+              "number": 16,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "original_sender",
+              "number": 17,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "sender_token",
+              "number": 18,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "router_label",
+              "number": 19,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "error_reason",
+              "number": 20,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/connection_service.proto",
+      "offset": "0x23d617c",
+      "bytes": 2822,
+      "package": "bgs.protocol.connection.v1",
+      "messages": [
+        {
+          "name": "ClientSdkVersionInfo",
+          "fields": [
+            {
+              "name": "sdk_name",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "sdk_version",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.SemanticVersion"
+            },
+            {
+              "name": "protocol_version",
+              "number": 3,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.SemanticVersion"
+            }
+          ]
+        },
+        {
+          "name": "ConnectRequest",
+          "fields": [
+            {
+              "name": "client_id",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.ProcessId"
+            },
+            {
+              "name": "bind_request",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.BindRequest"
+            },
+            {
+              "name": "use_bindless_rpc",
+              "number": 3,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "metering_level",
+              "number": 4,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.connection.v1.MeteringLevel"
+            },
+            {
+              "name": "client_sdk_info",
+              "number": 5,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.ClientSdkVersionInfo"
+            }
+          ]
+        },
+        {
+          "name": "ConnectionMeteringContentHandles",
+          "fields": [
+            {
+              "name": "content_handle",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.ContentHandle"
+            }
+          ]
+        },
+        {
+          "name": "ConnectResponse",
+          "fields": [
+            {
+              "name": "server_id",
+              "number": 1,
+              "label": 2,
+              "type": 11,
+              "typeName": ".bgs.protocol.ProcessId"
+            },
+            {
+              "name": "client_id",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.ProcessId"
+            },
+            {
+              "name": "bind_result",
+              "number": 3,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "bind_response",
+              "number": 4,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.BindResponse"
+            },
+            {
+              "name": "content_handle_array",
+              "number": 5,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.ConnectionMeteringContentHandles"
+            },
+            {
+              "name": "server_time",
+              "number": 6,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "use_bindless_rpc",
+              "number": 7,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "binary_content_handle_array",
+              "number": 8,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.ConnectionMeteringContentHandles"
+            },
+            {
+              "name": "ciid",
+              "number": 9,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "connected_region",
+              "number": 10,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "BoundService",
+          "fields": [
+            {
+              "name": "hash",
+              "number": 1,
+              "label": 2,
+              "type": 7,
+              "typeName": null
+            },
+            {
+              "name": "id",
+              "number": 2,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "BindRequest",
+          "fields": [
+            {
+              "name": "deprecated_imported_service_hash",
+              "number": 1,
+              "label": 3,
+              "type": 7,
+              "typeName": null
+            },
+            {
+              "name": "deprecated_exported_service",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.BoundService"
+            },
+            {
+              "name": "exported_service",
+              "number": 3,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.BoundService"
+            },
+            {
+              "name": "imported_service",
+              "number": 4,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.connection.v1.BoundService"
+            }
+          ]
+        },
+        {
+          "name": "BindResponse",
+          "fields": [
+            {
+              "name": "imported_service_id",
+              "number": 1,
+              "label": 3,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "EchoRequest",
+          "fields": [
+            {
+              "name": "time",
+              "number": 1,
+              "label": 1,
+              "type": 6,
+              "typeName": null
+            },
+            {
+              "name": "network_only",
+              "number": 2,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "payload",
+              "number": 3,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "forward",
+              "number": 4,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.ProcessId"
+            },
+            {
+              "name": "forward_client_id",
+              "number": 5,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "EchoResponse",
+          "fields": [
+            {
+              "name": "time",
+              "number": 1,
+              "label": 1,
+              "type": 6,
+              "typeName": null
+            },
+            {
+              "name": "payload",
+              "number": 2,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "DisconnectRequest",
+          "fields": [
+            {
+              "name": "error_code",
+              "number": 1,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "DisconnectNotification",
+          "fields": [
+            {
+              "name": "error_code",
+              "number": 1,
+              "label": 2,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "reason",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "EncryptRequest",
+          "fields": []
+        }
+      ],
+      "enums": [
+        {
+          "name": "MeteringLevel",
+          "values": [
+            {
+              "name": "METERING_LEVEL_LEGACY",
+              "number": 0
+            },
+            {
+              "name": "METERING_LEVEL_CATEGORIZED",
+              "number": 1
+            }
+          ]
+        }
+      ],
+      "services": [
+        {
+          "name": "ConnectionService",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "2": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "1": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "Connect",
+              "input": ".bgs.protocol.connection.v1.ConnectRequest",
+              "output": ".bgs.protocol.connection.v1.ConnectResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Bind",
+              "input": ".bgs.protocol.connection.v1.BindRequest",
+              "output": ".bgs.protocol.connection.v1.BindResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "10": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Echo",
+              "input": ".bgs.protocol.connection.v1.EchoRequest",
+              "output": ".bgs.protocol.connection.v1.EchoResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "ForceDisconnect",
+              "input": ".bgs.protocol.connection.v1.DisconnectNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "KeepAlive",
+              "input": ".bgs.protocol.NoData",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Encrypt",
+              "input": ".bgs.protocol.connection.v1.EncryptRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "10": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "RequestDisconnect",
+              "input": ".bgs.protocol.connection.v1.DisconnectRequest",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      7
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/global_extensions/method_options.proto",
+      "offset": "0x25607f6",
+      "bytes": 807,
+      "package": "bgs.protocol",
+      "messages": [
+        {
+          "name": "BGSMethodOptions",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "client_identity_routing",
+              "number": 2,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.ClientIdentityRoutingType"
+            },
+            {
+              "name": "enable_fanout",
+              "number": 3,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "legacy_fanout_replacement",
+              "number": 4,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "forward_key",
+              "number": 5,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "idempotent",
+              "number": 6,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "handle_destination_unreachable",
+              "number": 7,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "custom_region_resolver",
+              "number": 8,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "explicit_region_routing",
+              "number": 9,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "obsolete",
+              "number": 10,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "client_register_type",
+              "number": 11,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.ClientRegisterMethodType"
+            },
+            {
+              "name": "forward_key_proto_file",
+              "number": 12,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "forward_shard_name",
+              "number": 13,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/global_extensions/service_options.proto",
+      "offset": "0x23d83c4",
+      "bytes": 795,
+      "package": "bgs.protocol",
+      "messages": [
+        {
+          "name": "BGSServiceOptions",
+          "fields": [
+            {
+              "name": "descriptor_name",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "version",
+              "number": 4,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "shard_name",
+              "number": 5,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "resolve_client_instance",
+              "number": 6,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "type",
+              "number": 7,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.BGSServiceOptions.ServiceType"
+            },
+            {
+              "name": "api_type",
+              "number": 8,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "is_global",
+              "number": 9,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SDKServiceOptions",
+          "fields": [
+            {
+              "name": "inbound",
+              "number": 1,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "outbound",
+              "number": 2,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "use_client_id",
+              "number": 3,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "deprecated_32_bit",
+              "number": 4,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "obsolete",
+              "number": 5,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/global_extensions/routing.proto",
+      "offset": "0x23d8282",
+      "bytes": 264,
+      "package": "bgs.protocol",
+      "messages": [],
+      "enums": [
+        {
+          "name": "ClientIdentityRoutingType",
+          "values": [
+            {
+              "name": "CLIENT_IDENTITY_ROUTING_DISABLED",
+              "number": 0
+            },
+            {
+              "name": "CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT",
+              "number": 1
+            },
+            {
+              "name": "CLIENT_IDENTITY_ROUTING_GAME_ACCOUNT",
+              "number": 2
+            },
+            {
+              "name": "CLIENT_IDENTITY_ROUTING_INSTANCE_ID",
+              "number": 3
+            }
+          ]
+        }
+      ],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/global_extensions/register_method_types.proto",
+      "offset": "0x23d818a",
+      "bytes": 247,
+      "package": "bgs.protocol",
+      "messages": [],
+      "enums": [
+        {
+          "name": "ClientRegisterMethodType",
+          "values": [
+            {
+              "name": "REGISTER_CLIENT_NONE",
+              "number": 0
+            },
+            {
+              "name": "REGISTER_CLIENT_REGISTERED",
+              "number": 1
+            },
+            {
+              "name": "REGISTER_CLIENT_UNREGISTERED",
+              "number": 2
+            },
+            {
+              "name": "REGISTER_CLIENT_UNREGISTERED_NOTIFICATION",
+              "number": 3
+            }
+          ]
+        }
+      ],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/authentication_service.proto",
+      "offset": "0x23c4430",
+      "bytes": 993,
+      "package": "bgs.protocol.authentication.v2.client",
+      "messages": [
+        {
+          "name": "LogonRequest",
+          "fields": [
+            {
+              "name": "title_id",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "platform",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "locale",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "application_version",
+              "number": 4,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "logon_options",
+              "number": 10,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.authentication.v2.client.LogonOptions"
+            }
+          ]
+        },
+        {
+          "name": "VerifyAuthTokenRequest",
+          "fields": [
+            {
+              "name": "auth_token",
+              "number": 1,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GenerateAuthTokenRequest",
+          "fields": [
+            {
+              "name": "title_id",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GenerateAuthTokenResponse",
+          "fields": [
+            {
+              "name": "auth_token",
+              "number": 1,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "AuthenticationService",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {
+                "7": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "2": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "Logon",
+              "input": ".bgs.protocol.authentication.v2.client.LogonRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "VerifyAuthToken",
+              "input": ".bgs.protocol.authentication.v2.client.VerifyAuthTokenRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GenerateAuthToken",
+              "input": ".bgs.protocol.authentication.v2.client.GenerateAuthTokenRequest",
+              "output": ".bgs.protocol.authentication.v2.client.GenerateAuthTokenResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/authentication_types.proto",
+      "offset": "0x23c4978",
+      "bytes": 710,
+      "package": "bgs.protocol.authentication.v2.client",
+      "messages": [
+        {
+          "name": "LogonOptions",
+          "fields": [
+            {
+              "name": "auth_token",
+              "number": 1,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "user_agent",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "device_id",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "email",
+              "number": 10,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "phone_number",
+              "number": 11,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "auth_platform",
+              "number": 12,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "LogonRecord",
+          "fields": [
+            {
+              "name": "account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "game_account",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.account.v2.GameAccountHandle"
+            },
+            {
+              "name": "battle_tag",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "geoip_country",
+              "number": 4,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "session_key",
+              "number": 5,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "employee_only_mode",
+              "number": 6,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "login_ticket",
+              "number": 7,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "LogonQueueState",
+          "fields": [
+            {
+              "name": "position",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "estimated_queue_exit_time_s",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "exit_time_deviation_s",
+              "number": 3,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/authentication_listener.proto",
+      "offset": "0x23c3ed8",
+      "bytes": 1081,
+      "package": "bgs.protocol.authentication.v2.client",
+      "messages": [
+        {
+          "name": "LogonCompleteNotification",
+          "fields": [
+            {
+              "name": "error_code",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "record",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.authentication.v2.client.LogonRecord"
+            }
+          ]
+        },
+        {
+          "name": "LogonQueueUpdateNotification",
+          "fields": [
+            {
+              "name": "state",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.authentication.v2.client.LogonQueueState"
+            }
+          ]
+        },
+        {
+          "name": "ExternalChallengeNotification",
+          "fields": [
+            {
+              "name": "request_token",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "payload_type",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "payload",
+              "number": 3,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "AuthenticationListener",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {
+                "7": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "1": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "OnLogonComplete",
+              "input": ".bgs.protocol.authentication.v2.client.LogonCompleteNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnLogonQueueUpdate",
+              "input": ".bgs.protocol.authentication.v2.client.LogonQueueUpdateNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnLogonQueueEnd",
+              "input": ".bgs.protocol.NoData",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnExternalChallenge",
+              "input": ".bgs.protocol.authentication.v2.client.ExternalChallengeNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/session_service.proto",
+      "offset": "0x23d0ca0",
+      "bytes": 2201,
+      "package": "bgs.protocol.session.v2.client",
+      "messages": [
+        {
+          "name": "CreateSessionRequest",
+          "fields": [
+            {
+              "name": "game_account",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.account.v2.GameAccountHandle"
+            },
+            {
+              "name": "options",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.CreateOptions"
+            }
+          ]
+        },
+        {
+          "name": "CreateSessionResponse",
+          "fields": [
+            {
+              "name": "session_id",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionId"
+            },
+            {
+              "name": "variables",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionVariables"
+            }
+          ]
+        },
+        {
+          "name": "RestoreSessionRequest",
+          "fields": [
+            {
+              "name": "identity",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.account.v2.Identity"
+            },
+            {
+              "name": "session_key",
+              "number": 2,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "options",
+              "number": 3,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.RestoreOptions"
+            },
+            {
+              "name": "state_options",
+              "number": 4,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.StateOptions"
+            }
+          ]
+        },
+        {
+          "name": "RestoreSessionResponse",
+          "fields": [
+            {
+              "name": "session_id",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionId"
+            },
+            {
+              "name": "variables",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionVariables"
+            }
+          ]
+        },
+        {
+          "name": "DestroySessionRequest",
+          "fields": []
+        },
+        {
+          "name": "GetSignedSessionStateRequest",
+          "fields": []
+        },
+        {
+          "name": "GetSignedSessionStateResponse",
+          "fields": [
+            {
+              "name": "signed_token",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetSessionStateRequest",
+          "fields": []
+        },
+        {
+          "name": "GetSessionStateResponse",
+          "fields": [
+            {
+              "name": "session",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionState"
+            }
+          ]
+        },
+        {
+          "name": "MarkSessionAliveRequest",
+          "fields": []
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "SessionService",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "2": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "CreateSession",
+              "input": ".bgs.protocol.session.v2.client.CreateSessionRequest",
+              "output": ".bgs.protocol.session.v2.client.CreateSessionResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "RestoreSession",
+              "input": ".bgs.protocol.session.v2.client.RestoreSessionRequest",
+              "output": ".bgs.protocol.session.v2.client.RestoreSessionResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "DestroySession",
+              "input": ".bgs.protocol.session.v2.client.DestroySessionRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GetSignedSessionState",
+              "input": ".bgs.protocol.session.v2.client.GetSignedSessionStateRequest",
+              "output": ".bgs.protocol.session.v2.client.GetSignedSessionStateResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GetSessionState",
+              "input": ".bgs.protocol.session.v2.client.GetSessionStateRequest",
+              "output": ".bgs.protocol.session.v2.client.GetSessionStateResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "6": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "MarkSessionAlive",
+              "input": ".bgs.protocol.session.v2.client.MarkSessionAliveRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/session_types.proto",
+      "offset": "0x23d1864",
+      "bytes": 2111,
+      "package": "bgs.protocol.session.v2.client",
+      "messages": [
+        {
+          "name": "CreateOptions",
+          "fields": [
+            {
+              "name": "mac_address",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "StateOptions",
+          "fields": [
+            {
+              "name": "billing",
+              "number": 1,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "presence",
+              "number": 2,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "RestoreOptions",
+          "fields": [
+            {
+              "name": "client_address",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "mac_address",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "platform",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "locale",
+              "number": 4,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "application_version",
+              "number": 5,
+              "label": 1,
+              "type": 5,
+              "typeName": null
+            },
+            {
+              "name": "user_agent",
+              "number": 6,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "auth_platform",
+              "number": 7,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SessionId",
+          "fields": [
+            {
+              "name": "account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "game_account",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.account.v2.GameAccountHandle"
+            },
+            {
+              "name": "instance_id",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "region",
+              "number": 4,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "BillingState",
+          "fields": [
+            {
+              "name": "benefactor",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.BenefactorState"
+            },
+            {
+              "name": "billing_enabled",
+              "number": 2,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "free_session",
+              "number": 3,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "using_life_time_license",
+              "number": 4,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "using_subscription",
+              "number": 5,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "consumption_game_time",
+              "number": 6,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "expire_time_ms",
+              "number": 7,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SessionConstraint",
+          "fields": [
+            {
+              "name": "parental_controls_active",
+              "number": 1,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "next_pc_kick_time_ms",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SessionState",
+          "fields": [
+            {
+              "name": "session_id",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionId"
+            },
+            {
+              "name": "create_time_ms",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "billing",
+              "number": 3,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.BillingState"
+            },
+            {
+              "name": "constraint",
+              "number": 4,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionConstraint"
+            }
+          ]
+        },
+        {
+          "name": "BenefactorId",
+          "fields": [
+            {
+              "name": "uuid",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "external_id",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "BenefactorState",
+          "fields": [
+            {
+              "name": "benefactor_id",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.BenefactorId"
+            },
+            {
+              "name": "registered_location",
+              "number": 2,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "activated",
+              "number": 3,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "igr_paid",
+              "number": 4,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SessionVariables",
+          "fields": [
+            {
+              "name": "creation_timeout_s",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "recommended_mark_alive_interval_s",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "max_mark_alive_interval_s",
+              "number": 3,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SessionKey",
+          "fields": [
+            {
+              "name": "key",
+              "number": 1,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "expiration_s",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [
+        {
+          "name": "SessionRestrictionType",
+          "values": [
+            {
+              "name": "SESSION_RESTRICTION_TYPE_UNSPECIFIED",
+              "number": 0
+            },
+            {
+              "name": "SESSION_RESTRICTION_TYPE_PARENTAL_CONTROL",
+              "number": 1
+            },
+            {
+              "name": "SESSION_RESTRICTION_TYPE_GOVERNMENT_CONTROL",
+              "number": 2
+            },
+            {
+              "name": "SESSION_RESTRICTION_TYPE_CAIS",
+              "number": 3
+            }
+          ]
+        },
+        {
+          "name": "SessionDestructionStatusDetails",
+          "values": [
+            {
+              "name": "ACCOUNT_MUTED",
+              "number": 1
+            },
+            {
+              "name": "BATTLE_TAG_CHANGED",
+              "number": 2
+            },
+            {
+              "name": "BNET_ACCOUNT_BANNED",
+              "number": 3
+            },
+            {
+              "name": "BNET_ACCOUNT_FLAG_CHANGED",
+              "number": 4
+            },
+            {
+              "name": "COUNTRY_CHANGED",
+              "number": 5
+            },
+            {
+              "name": "CURRENCY_CHANGED",
+              "number": 6
+            },
+            {
+              "name": "GAME_ACCOUNT_UNLINKED",
+              "number": 7
+            },
+            {
+              "name": "LEGAL_REGION_CHANGED",
+              "number": 8
+            },
+            {
+              "name": "LEGAL_LOCALE_CHANGED",
+              "number": 9
+            },
+            {
+              "name": "LICENSE_CHANGED",
+              "number": 10
+            },
+            {
+              "name": "NAME_CHANGED",
+              "number": 11
+            },
+            {
+              "name": "OPT_IN_CHANGED",
+              "number": 12
+            },
+            {
+              "name": "REGION_CHANGED",
+              "number": 13
+            }
+          ]
+        }
+      ],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/session_listener.proto",
+      "offset": "0x23d04ec",
+      "bytes": 1518,
+      "package": "bgs.protocol.session.v2.client",
+      "messages": [
+        {
+          "name": "SessionCreatedNotification",
+          "fields": [
+            {
+              "name": "status",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "session_key",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionKey"
+            },
+            {
+              "name": "session_id",
+              "number": 3,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionId"
+            }
+          ]
+        },
+        {
+          "name": "SessionDestroyedNotification",
+          "fields": [
+            {
+              "name": "status",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "status_details",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "session_id",
+              "number": 3,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.session.v2.client.SessionId"
+            }
+          ]
+        },
+        {
+          "name": "SessionGameTimeWarningNotification",
+          "fields": [
+            {
+              "name": "remaining_time_duration_min",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "restriction_type",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SessionQueueUpdatedNotification",
+          "fields": [
+            {
+              "name": "position",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "avg_creation_time_ms",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "queued_time_ms",
+              "number": 3,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SessionQueueEndNotification",
+          "fields": [
+            {
+              "name": "status",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "SessionListener",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {
+                "7": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "1": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "OnSessionCreated",
+              "input": ".bgs.protocol.session.v2.client.SessionCreatedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnSessionDestroyed",
+              "input": ".bgs.protocol.session.v2.client.SessionDestroyedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnSessionGameTimeWarning",
+              "input": ".bgs.protocol.session.v2.client.SessionGameTimeWarningNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnSessionQueueUpdated",
+              "input": ".bgs.protocol.session.v2.client.SessionQueueUpdatedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnSessionQueueEnd",
+              "input": ".bgs.protocol.session.v2.client.SessionQueueEndNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/friends_service.proto",
+      "offset": "0x255beab",
+      "bytes": 3457,
+      "package": "bgs.protocol.friends.v2.client",
+      "messages": [
+        {
+          "name": "SubscribeRequest",
+          "fields": []
+        },
+        {
+          "name": "UnsubscribeRequest",
+          "fields": []
+        },
+        {
+          "name": "GetSentInvitationsRequest",
+          "fields": [
+            {
+              "name": "continuation",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetSentInvitationsResponse",
+          "fields": [
+            {
+              "name": "invitations",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.SentInvitation"
+            },
+            {
+              "name": "continuation",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetReceivedInvitationsRequest",
+          "fields": [
+            {
+              "name": "continuation",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetReceivedInvitationsResponse",
+          "fields": [
+            {
+              "name": "invitations",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.ReceivedInvitation"
+            },
+            {
+              "name": "continuation",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetFriendsRequest",
+          "fields": [
+            {
+              "name": "options",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.GetFriendsOptions"
+            },
+            {
+              "name": "continuation",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetFriendsResponse",
+          "fields": [
+            {
+              "name": "friends",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.Friend"
+            },
+            {
+              "name": "continuation",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "IsFriendRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "IsFriendResponse",
+          "fields": [
+            {
+              "name": "result",
+              "number": 1,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "ViewFriendsRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "continuation",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "ViewFriendsResponse",
+          "fields": [
+            {
+              "name": "friends",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.FriendOfFriend"
+            },
+            {
+              "name": "continuation",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SendInvitationRequest",
+          "fields": [
+            {
+              "name": "target",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.SendInvitationTarget"
+            },
+            {
+              "name": "options",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.SendInvitationOptions"
+            }
+          ]
+        },
+        {
+          "name": "RevokeInvitationRequest",
+          "fields": [
+            {
+              "name": "invitation_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "RevokeAllInvitationsRequest",
+          "fields": []
+        },
+        {
+          "name": "AcceptInvitationRequest",
+          "fields": [
+            {
+              "name": "invitation_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "options",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.AcceptInvitationOptions"
+            }
+          ]
+        },
+        {
+          "name": "IgnoreInvitationRequest",
+          "fields": [
+            {
+              "name": "invitation_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "RemoveFriendRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "UpdateFriendStateRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "options",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.UpdateFriendStateOptions"
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "FriendsService",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "2": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "Subscribe",
+              "input": ".bgs.protocol.friends.v2.client.SubscribeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Unsubscribe",
+              "input": ".bgs.protocol.friends.v2.client.UnsubscribeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GetSentInvitations",
+              "input": ".bgs.protocol.friends.v2.client.GetSentInvitationsRequest",
+              "output": ".bgs.protocol.friends.v2.client.GetSentInvitationsResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GetReceivedInvitations",
+              "input": ".bgs.protocol.friends.v2.client.GetReceivedInvitationsRequest",
+              "output": ".bgs.protocol.friends.v2.client.GetReceivedInvitationsResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GetFriends",
+              "input": ".bgs.protocol.friends.v2.client.GetFriendsRequest",
+              "output": ".bgs.protocol.friends.v2.client.GetFriendsResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "IsFriend",
+              "input": ".bgs.protocol.friends.v2.client.IsFriendRequest",
+              "output": ".bgs.protocol.friends.v2.client.IsFriendResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "ViewFriends",
+              "input": ".bgs.protocol.friends.v2.client.ViewFriendsRequest",
+              "output": ".bgs.protocol.friends.v2.client.ViewFriendsResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      7
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "SendInvitation",
+              "input": ".bgs.protocol.friends.v2.client.SendInvitationRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      8
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "AcceptInvitation",
+              "input": ".bgs.protocol.friends.v2.client.AcceptInvitationRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      9
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "RevokeInvitation",
+              "input": ".bgs.protocol.friends.v2.client.RevokeInvitationRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      10
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "RevokeAllInvitations",
+              "input": ".bgs.protocol.friends.v2.client.RevokeAllInvitationsRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      11
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "IgnoreInvitation",
+              "input": ".bgs.protocol.friends.v2.client.IgnoreInvitationRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      12
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "RemoveFriend",
+              "input": ".bgs.protocol.friends.v2.client.RemoveFriendRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      13
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "UpdateFriendState",
+              "input": ".bgs.protocol.friends.v2.client.UpdateFriendStateRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      14
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/friends_types.proto",
+      "offset": "0x23cdc30",
+      "bytes": 1942,
+      "package": "bgs.protocol.friends.v2.client",
+      "messages": [
+        {
+          "name": "SendInvitationTarget",
+          "fields": [
+            {
+              "name": "name",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "account_id",
+              "number": 10,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "email",
+              "number": 11,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "battle_tag",
+              "number": 12,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "phone_number",
+              "number": 13,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SendInvitationOptions",
+          "fields": [
+            {
+              "name": "level",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "attributes",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Attribute"
+            }
+          ]
+        },
+        {
+          "name": "AcceptInvitationOptions",
+          "fields": [
+            {
+              "name": "level",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetFriendsOptions",
+          "fields": [
+            {
+              "name": "fetch_names",
+              "number": 1,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "UserDescription",
+          "fields": [
+            {
+              "name": "account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "battle_tag",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "full_name",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "ReceivedInvitation",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "inviter",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.UserDescription"
+            },
+            {
+              "name": "invitee",
+              "number": 3,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.UserDescription"
+            },
+            {
+              "name": "level",
+              "number": 4,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "program",
+              "number": 5,
+              "label": 1,
+              "type": 7,
+              "typeName": null
+            },
+            {
+              "name": "attributes",
+              "number": 6,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Attribute"
+            },
+            {
+              "name": "creation_time_s",
+              "number": 7,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "expiration_time_s",
+              "number": 8,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SentInvitation",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "target_name",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "level",
+              "number": 3,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "program",
+              "number": 4,
+              "label": 1,
+              "type": 7,
+              "typeName": null
+            },
+            {
+              "name": "attributes",
+              "number": 5,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Attribute"
+            },
+            {
+              "name": "creation_time_s",
+              "number": 6,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "RemovedInvitationAssignment",
+          "fields": [
+            {
+              "name": "invitation_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "reason",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "RemovedFriendAssignment",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "UpdateFriendStateOptions",
+          "fields": [
+            {
+              "name": "attributes",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Attribute"
+            }
+          ]
+        },
+        {
+          "name": "Friend",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "level",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "battle_tag",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "full_name",
+              "number": 4,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "attributes",
+              "number": 5,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Attribute"
+            },
+            {
+              "name": "creation_time_s",
+              "number": 6,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "FriendStateAssignment",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "level",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "attributes",
+              "number": 3,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Attribute"
+            }
+          ]
+        },
+        {
+          "name": "FriendOfFriend",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "level",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "full_name",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "battle_tag",
+              "number": 4,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [
+        {
+          "name": "FriendLevel",
+          "values": [
+            {
+              "name": "FRIEND_LEVEL_BATTLE_TAG",
+              "number": 1
+            },
+            {
+              "name": "FRIEND_LEVEL_REAL_ID",
+              "number": 2
+            }
+          ]
+        }
+      ],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/friends_listener.proto",
+      "offset": "0x255b5ec",
+      "bytes": 2084,
+      "package": "bgs.protocol.friends.v2.client",
+      "messages": [
+        {
+          "name": "FriendAddedNotification",
+          "fields": [
+            {
+              "name": "agent_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "friends",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.Friend"
+            }
+          ]
+        },
+        {
+          "name": "FriendRemovedNotification",
+          "fields": [
+            {
+              "name": "agent_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "assignments",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.RemovedFriendAssignment"
+            }
+          ]
+        },
+        {
+          "name": "ReceivedInvitationAddedNotification",
+          "fields": [
+            {
+              "name": "agent_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "invitations",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.ReceivedInvitation"
+            }
+          ]
+        },
+        {
+          "name": "ReceivedInvitationRemovedNotification",
+          "fields": [
+            {
+              "name": "agent_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "assignments",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.RemovedInvitationAssignment"
+            }
+          ]
+        },
+        {
+          "name": "SentInvitationAddedNotification",
+          "fields": [
+            {
+              "name": "agent_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "invitations",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.SentInvitation"
+            }
+          ]
+        },
+        {
+          "name": "SentInvitationRemovedNotification",
+          "fields": [
+            {
+              "name": "agent_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "assignments",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.RemovedInvitationAssignment"
+            }
+          ]
+        },
+        {
+          "name": "UpdateFriendStateNotification",
+          "fields": [
+            {
+              "name": "agent_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "assignments",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.friends.v2.client.FriendStateAssignment"
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "FriendsListener",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {
+                "7": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "1": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "OnFriendAdded",
+              "input": ".bgs.protocol.friends.v2.client.FriendAddedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnFriendRemoved",
+              "input": ".bgs.protocol.friends.v2.client.FriendRemovedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnReceivedInvitationAdded",
+              "input": ".bgs.protocol.friends.v2.client.ReceivedInvitationAddedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnReceivedInvitationRemoved",
+              "input": ".bgs.protocol.friends.v2.client.ReceivedInvitationRemovedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnSentInvitationAdded",
+              "input": ".bgs.protocol.friends.v2.client.SentInvitationAddedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnSentInvitationRemoved",
+              "input": ".bgs.protocol.friends.v2.client.SentInvitationRemovedNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "OnUpdateFriendState",
+              "input": ".bgs.protocol.friends.v2.client.UpdateFriendStateNotification",
+              "output": ".bgs.protocol.NO_RESPONSE",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      7
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/presence_service.proto",
+      "offset": "0x23cf248",
+      "bytes": 1526,
+      "package": "bgs.protocol.presence.v2.client",
+      "messages": [
+        {
+          "name": "BatchSubscribeRequest",
+          "fields": [
+            {
+              "name": "account_ids",
+              "number": 1,
+              "label": 3,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "BatchUnsubscribeRequest",
+          "fields": [
+            {
+              "name": "account_ids",
+              "number": 1,
+              "label": 3,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "QueryRequest",
+          "fields": [
+            {
+              "name": "account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "query_behavior",
+              "number": 2,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.presence.v2.PresenceQueryBehavior"
+            },
+            {
+              "name": "keys",
+              "number": 3,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldKey"
+            },
+            {
+              "name": "since_us",
+              "number": 4,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "QueryResponse",
+          "fields": [
+            {
+              "name": "states",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldState"
+            }
+          ]
+        },
+        {
+          "name": "UpdateRequest",
+          "fields": [
+            {
+              "name": "updates",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldUpdate"
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "PresenceService",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {
+                "9": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "2": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "BatchSubscribe",
+              "input": ".bgs.protocol.presence.v2.client.BatchSubscribeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "BatchUnsubscribe",
+              "input": ".bgs.protocol.presence.v2.client.BatchUnsubscribeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Query",
+              "input": ".bgs.protocol.presence.v2.client.QueryRequest",
+              "output": ".bgs.protocol.presence.v2.client.QueryResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      3
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                }
+              ]
+            },
+            {
+              "name": "Update",
+              "input": ".bgs.protocol.presence.v2.client.UpdateRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      3
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {}
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/whisper_service.proto",
+      "offset": "0x23d316c",
+      "bytes": 1994,
+      "package": "bgs.protocol.whisper.v2.client",
+      "messages": [
+        {
+          "name": "SubscribeRequest",
+          "fields": []
+        },
+        {
+          "name": "SubscribeResponse",
+          "fields": [
+            {
+              "name": "view",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.whisper.v2.WhisperView"
+            }
+          ]
+        },
+        {
+          "name": "UnsubscribeRequest",
+          "fields": []
+        },
+        {
+          "name": "GetWhisperHistoryRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "options",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.GetEventOptions"
+            },
+            {
+              "name": "continuation",
+              "number": 4,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "GetWhisperHistoryResponse",
+          "fields": [
+            {
+              "name": "whispers",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.whisper.v2.Whisper"
+            },
+            {
+              "name": "continuation",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "SendWhisperRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "options",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.whisper.v2.SendWhisperOptions"
+            }
+          ]
+        },
+        {
+          "name": "SendWhisperResponse",
+          "fields": [
+            {
+              "name": "whisper",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.whisper.v2.Whisper"
+            }
+          ]
+        },
+        {
+          "name": "SetTypingIndicatorRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "indicator",
+              "number": 2,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.TypingIndicator"
+            }
+          ]
+        },
+        {
+          "name": "AdvanceViewTimeRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "AdvanceClearTimeRequest",
+          "fields": [
+            {
+              "name": "target_account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "WhisperService",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {}
+            },
+            {
+              "extension": 90000,
+              "numericFields": {
+                "9": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "2": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "3": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "Subscribe",
+              "input": ".bgs.protocol.whisper.v2.client.SubscribeRequest",
+              "output": ".bgs.protocol.whisper.v2.client.SubscribeResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      1
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Unsubscribe",
+              "input": ".bgs.protocol.whisper.v2.client.UnsubscribeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      2
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "GetWhisperHistory",
+              "input": ".bgs.protocol.whisper.v2.client.GetWhisperHistoryRequest",
+              "output": ".bgs.protocol.whisper.v2.client.GetWhisperHistoryResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "SendWhisper",
+              "input": ".bgs.protocol.whisper.v2.client.SendWhisperRequest",
+              "output": ".bgs.protocol.whisper.v2.client.SendWhisperResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "AdvanceViewTime",
+              "input": ".bgs.protocol.whisper.v2.client.AdvanceViewTimeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "AdvanceClearTime",
+              "input": ".bgs.protocol.whisper.v2.client.AdvanceClearTimeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "SetTypingIndicator",
+              "input": ".bgs.protocol.whisper.v2.client.SetTypingIndicatorRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      7
+                    ]
+                  }
+                },
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "2": [
+                      1
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
