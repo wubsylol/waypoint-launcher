@@ -441,7 +441,6 @@ final class GameCell: NSView {
         if let account { parts.append(account) }
         if game.install.platform == .windows {
             parts.append(WindowsTitle.forInstall(game.install)?.compatibilityLabel ?? "Windows")
-            if WindowsTitle.forInstall(game.install)?.isQualified == false { parts.append("Preview") }
         }
         else if game.appURL != nil, !game.runsNatively { parts.append("Intel") }
         return parts.joined(separator: " · ")

@@ -152,7 +152,7 @@ private func windowsFixture(_ title: WindowsTitle) throws -> Data {
         #expect(product.installationDisplayName(platform: .macOS) == product.displayName)
         let label = product.installationDisplayName(platform: .windows)
         #expect(label.contains(title.compatibilityLabel))
-        #expect(label.contains("Preview") == !title.isQualified)
+        #expect(!label.contains("Preview"))
         #expect(product.uid == title.uid)
     }
     let wow = InstallableProduct.native.first { $0.productCode == "wow" }!

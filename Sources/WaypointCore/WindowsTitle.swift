@@ -68,8 +68,7 @@ public enum WindowsTitle: String, CaseIterable, Sendable {
         }
     }
 
-    /// Preview availability is separate from full gameplay qualification.
-    /// Keep the Preview label until broader gameplay checks have passed.
+    /// Internal gameplay qualification, separate from availability and UI labels.
     public var isQualified: Bool { self == .heroes }
     public var isEnabled: Bool { true }
     public static var enabled: [Self] { allCases.filter(\.isEnabled) }
