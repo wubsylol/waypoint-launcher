@@ -11,11 +11,11 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 480), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Read-only Experiment (session diagnostics 8)"
+        window.title = "Waypoint Friends — Read-only Experiment (connection identity control 9)"
         window.isReleasedWhenClosed = false; window.delegate = self
         let title = NSTextField(labelWithString: "Battle.net connection and session diagnostics")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. Reads only whether connection/logon metadata is present, then queries existing session state. It sends no session creation, restoration or destruction requests, retrieves no friends and shows no identifiers.")
+        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. Includes only the current connection’s server-provided identity in the existing-session query header; sign-in is unchanged. It sends no session creation, restoration or destruction requests, retrieves no friends and shows no identifiers.")
         explanation.textColor = .secondaryLabelColor
         button = NSButton(title: "Read session diagnostics", target: self, action: #selector(readFriends))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelRead))
@@ -55,13 +55,14 @@ import WaypointCore
                 guard AccountList.load(from: self.defaults).activeID == account.id, !self.gameIsRunning(), version.buildID > 0, version.region == "us" else {
                     self.status.stringValue = "Account changed, WoW opened, or build metadata was unavailable. No connection made."; return
                 }
-                let report = try await NativeGameAccounts().sessionDiagnostics(token: token, build: UInt64(version.buildID), region: .us)
+                let report = try await NativeGameAccounts().sessionDiagnostics(token: token, build: UInt64(version.buildID), region: .us, includeConnectionIdentity: true)
                 try Task.checkCancellation()
                 guard AccountList.load(from: self.defaults).activeID == account.id else { self.status.stringValue = "Account changed; result discarded."; return }
                 func yesNo(_ value: Bool?) -> String { value.map { $0 ? "yes" : "no" } ?? "not reported / unknown" }
                 self.output.string = [
                     "Bindless RPC accepted: \(yesNo(report.bindlessAccepted))",
                     "Connection identity field present: \(yesNo(report.connectionIdentityPresent))",
+                    "Identity included in query header: \(yesNo(report.connectionIdentityIncluded))",
                     "Logon field 3 present (desktop: BattleTag): \(yesNo(report.logonRecordHasField3))",
                     "Logon field 2 present (desktop: game account): \(yesNo(report.logonRecordHasField2))",
                     "Logon field 5 present (desktop: session key): \(yesNo(report.logonRecordHasField5))",

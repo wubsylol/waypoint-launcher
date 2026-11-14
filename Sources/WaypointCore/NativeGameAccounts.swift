@@ -20,6 +20,8 @@ public final class NativeGameAccounts {
     private enum ReplyKind { case native, friends, sessionDiagnostic }
     private typealias W = BGSWire
     private var recordsDiagnostics = false
+    private var includesConnectionIdentity = false
+    private var connectionIdentity: String?
     private var diagnosticStage = SessionDiagnosticStage.connection
     private var diagnostics = NativeSessionDiagnostics(bindlessAccepted: nil, connectionIdentityPresent: false,
         logonRecordHasField3: false, logonRecordHasField2: false, logonRecordHasField5: false,
@@ -62,6 +64,15 @@ public final class NativeGameAccounts {
                     diagnostics.bindlessAccepted = accepted == 1
                 }
                 diagnostics.connectionIdentityPresent = connection[9] != nil
+                if includesConnectionIdentity {
+                    let rawIdentity = try W.data(connection, 9)
+                    guard rawIdentity.count <= 512,
+                          let identity = String(data: rawIdentity, encoding: .utf8), !identity.isEmpty,
+                          !identity.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+                        throw SessionDiagnosticFailure.malformed(.connectionMetadata)
+                    }
+                    connectionIdentity = identity // In memory only; never displayed/logged.
+                }
             }
             let request = W.number(1, 5_730_135) + W.text(2, "Mc64") + W.text(3, "enUS")
                 + W.number(4, build) + W.bytes(10, W.text(1, token.value))
@@ -144,8 +155,9 @@ public final class NativeGameAccounts {
     }
     /// Read-only connection metadata plus GetSessionState. Sends no session
     /// creation, restoration, destruction or mark-alive request.
-    public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region) async throws -> NativeSessionDiagnostics {
+    public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region, includeConnectionIdentity: Bool = false) async throws -> NativeSessionDiagnostics {
         recordsDiagnostics = true
+        includesConnectionIdentity = includeConnectionIdentity
         do {
             return try await authenticated(token: token, build: build, region: region) {
                 do {
@@ -173,11 +185,12 @@ public final class NativeGameAccounts {
         catch Failure.unavailable { throw SessionDiagnosticFailure.unavailable(diagnosticStage) }
     }
 
-    private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil) async throws {
+    private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil, clientID: String? = nil) async throws {
         try Task.checkCancellation()
         guard !closed, body.count <= 1_048_576 else { throw Failure.unavailable }
         var header = W.number(1, service) + W.number(2, method) + W.number(3, token) + W.number(5, UInt64(body.count))
         if let hash { header += W.fixed32(11, hash) }
+        if let clientID { header += W.text(13, clientID) }
         let frame = Data([UInt8(header.count >> 8), UInt8(header.count & 255)]) + header + body
         try await transport.send(frame)
     }
@@ -205,7 +218,13 @@ public final class NativeGameAccounts {
     }
     private func call(hash: UInt32, method: UInt64, body: Data = Data(), replyKind: ReplyKind = .native) async throws -> Data {
         let token = sequence; sequence += 1
-        try await send(service: 0, method: method, token: token, body: body, hash: hash)
+        var clientID: String?
+        if replyKind == .sessionDiagnostic, includesConnectionIdentity {
+            guard let identity = connectionIdentity else { throw SessionDiagnosticFailure.unavailable(.query) }
+            clientID = identity
+            diagnostics.connectionIdentityIncluded = true
+        }
+        try await send(service: 0, method: method, token: token, body: body, hash: hash, clientID: clientID)
         while true {
             let (header, response) = try await receive()
             if try W.uint(header, 1) == 254 {

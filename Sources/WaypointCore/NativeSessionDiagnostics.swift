@@ -3,6 +3,7 @@ import Foundation
 /// Presence/status only. Never exposes CIIDs, session IDs/keys, BattleTags or tokens.
 public struct NativeSessionDiagnostics: Equatable, Sendable {
     public var bindlessAccepted: Bool?
+    public var connectionIdentityIncluded: Bool = false
     public var connectionIdentityPresent: Bool
     public var logonRecordHasField3: Bool
     public var logonRecordHasField2: Bool

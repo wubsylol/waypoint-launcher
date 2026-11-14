@@ -304,3 +304,35 @@ private func diagnosticReplies(queryBody: Data, owner: UInt64 = 123) -> [Data] {
         #expect(stage == .query); #expect(hash == 0x12345678); #expect(method == 7); #expect(transport.cancelled)
     } catch { Issue.record("Callback failed without safe stage classification") }
 }
+
+@Test @MainActor func sessionDiagnosticsIdentityControlChangesOnlyQueryHeader() async throws {
+    var written: [[Data]] = []
+    for includeIdentity in [false, true] {
+        let transport = AccountTestTransport(diagnosticReplies(queryBody: Data()).reduce(Data(), +))
+        let report = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us, includeConnectionIdentity: includeIdentity)
+        #expect(report.connectionIdentityIncluded == includeIdentity)
+        #expect(transport.cancelled); #expect(transport.written.count == 3)
+        written.append(transport.written)
+    }
+    #expect(Array(written[0].prefix(2)) == Array(written[1].prefix(2)))
+    var headers: [BGSWire.Message] = []
+    for packet in written.map({ $0[2] }) {
+        let prefix = [UInt8](packet.prefix(2)), length = Int(prefix[0]) * 256 + Int(prefix[1])
+        headers.append(try BGSWire.decode(Data(packet.dropFirst(2).prefix(length))))
+        #expect(packet.dropFirst(2 + length).isEmpty)
+    }
+    #expect(headers[0][13] == nil)
+    #expect(try BGSWire.data(headers[1], 13) == Data("synthetic-connection-id".utf8))
+    headers[1].removeValue(forKey: 13)
+    #expect(headers[0] == headers[1])
+}
+@Test @MainActor func sessionDiagnosticsRefusesToInventAMissingConnectionIdentity() async {
+    var replies = diagnosticReplies(queryBody: Data()); replies[0] = accountFrame(token: 0)
+    let transport = AccountTestTransport(replies.reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us, includeConnectionIdentity: true)
+        Issue.record("Sent query without the required control identity")
+    } catch SessionDiagnosticFailure.malformed(let stage) {
+        #expect(stage == .connectionMetadata); #expect(transport.written.count == 1); #expect(transport.cancelled)
+    } catch { Issue.record("Missing control identity failed without metadata classification") }
+}

@@ -240,3 +240,23 @@ The optional metadata fix also avoids using a singular getter on fields that
 may be repeated (the desktop schema labels logon game_account2 repeated).
 The failure of v6/v7 therefore is not evidence that the server uses a different
 schema. It was an instrumentation assumption, not proof of failed credentials.
+
+## Connection identity header control (version0.0.9)
+
+Explicit includeConnectionIdentity=true reads only current ConnectResponse9 as
+a bounded512-byte nonemptyUTF8/no-control string. It stays private in memory.
+Only the existing-session query gets Header.client_id13; connection/authentication
+packets, raw query method5, hash/body and cleanup are unchanged. No identifier is
+guessed and no application session is created/restored by a request. Default is
+false; missing/malformed CID stops before authentication/query in this mode.
+
+The mapping of ConnectResponse.ciid to Header.client_id is a hypothesis, not an
+established SDK behavior. The DTO/UI exposes only a boolean that it was included.
+27 targeted checks pass, including header-only parity and a missing-ID stop.
+No other call kind receives this header. Live result recorded separately.
+
+Version0.0.9 live result: identity field was present and included in the query
+header; the correlated GetSessionState status remained7. Session existence is
+still unknown. This rules out that particular session-query-header control as
+a fix, not Header.client_id for every social method. Authentication completed;
+no new session-creation/restoration/destruction request was sent.
