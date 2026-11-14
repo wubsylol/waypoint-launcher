@@ -11,11 +11,11 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 480), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Read-only Experiment (diagnostics 2)"
+        window.title = "Waypoint Friends — Read-only Experiment (legacy snapshot 3)"
         window.isReleasedWhenClosed = false; window.delegate = self
         let title = NSTextField(labelWithString: "Battle.net friends snapshot")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. Online status is not checked.")
+        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. This test uses the legacy read-only endpoint; BattleTags and online status are not retrieved.")
         explanation.textColor = .secondaryLabelColor
         button = NSButton(title: "Read friends", target: self, action: #selector(readFriends))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelRead))
@@ -55,11 +55,11 @@ import WaypointCore
                 guard AccountList.load(from: self.defaults).activeID == account.id, !self.gameIsRunning(), version.buildID > 0, version.region == "us" else {
                     self.status.stringValue = "Account changed, WoW opened, or build metadata was unavailable. No connection made."; return
                 }
-                let friends = try await NativeGameAccounts().friends(token: token, build: UInt64(version.buildID), region: .us)
+                let friends = try await NativeGameAccounts().friends(token: token, build: UInt64(version.buildID), region: .us, protocolVersion: .legacy)
                 try Task.checkCancellation()
                 guard AccountList.load(from: self.defaults).activeID == account.id else { self.status.stringValue = "Account changed; result discarded."; return }
-                self.output.string = friends.map(\.displayName).joined(separator: "\n")
-                self.status.stringValue = "Received \(friends.count) friends. Snapshot only; connection closed."
+                self.output.string = friends.enumerated().map { "Friend \($0.offset + 1) — BattleTag unavailable in this snapshot" }.joined(separator: "\n")
+                self.status.stringValue = "Legacy endpoint returned \(friends.count) friend entries. Names not retrieved; connection closed."
             } catch is CancellationError { self.status.stringValue = "Cancelled. No saved login changed." }
             catch FriendSnapshotFailure.requestRejected(let code) {
                 let reason = code == 3025 ? "RPC method disabled" : "request refused"

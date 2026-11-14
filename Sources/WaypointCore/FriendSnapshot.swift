@@ -40,3 +40,28 @@ struct FriendSnapshotPage {
 public enum FriendSnapshotFailure: Error {
     case requestRejected(UInt64)
 }
+
+
+public enum FriendSnapshotProtocol: Sendable {
+    case current, legacy
+}
+
+/// Legacy schema has entity references and attributes, not a dedicated BattleTag.
+/// Do not interpret arbitrary attributes as names or expose Real ID information.
+struct LegacyFriendSnapshot {
+    static func decode(_ data: Data) throws -> [BattleNetFriend] {
+        typealias W = BGSWire
+        let values = try W.decode(data)[1] ?? []
+        guard values.count <= 1000 else { throw W.Failure.oversized }
+        var result: [BattleNetFriend] = [], seen = Set<String>()
+        for value in values {
+            guard case .bytes(let entry) = value else { throw W.Failure.malformed }
+            let entity = try W.decode(W.data(W.decode(entry), 1))
+            let high = try W.uint(entity, 1, default: 0), low = try W.uint(entity, 2)
+            let id = "\(high):\(low)"
+            guard low > 0, seen.insert(id).inserted else { throw W.Failure.malformed }
+            result.append(BattleNetFriend(id: id, battleTag: nil))
+        }
+        return result
+    }
+}

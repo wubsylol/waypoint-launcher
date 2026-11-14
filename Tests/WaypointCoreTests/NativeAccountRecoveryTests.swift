@@ -178,3 +178,31 @@ private func friendPage(_ id: UInt64, tag: String, continuation: UInt64? = nil) 
     } catch NativeGameAccounts.Failure.rejected(let code) { #expect(code == 3025); #expect(transport.cancelled) }
     catch { Issue.record("Authentication notification was mislabeled as social rejection") }
 }
+
+
+private func legacyFriend(_ low: UInt64) -> Data {
+    // Exercise fixed64 wire encoding, not just the codec’s varint path.
+    func fixed(_ field: Int, _ value: UInt64) -> Data {
+        BGSWire.varint(UInt64(field << 3 | 1)) + Data((0..<8).map { UInt8(truncatingIfNeeded: value >> ($0 * 8)) })
+    }
+    return BGSWire.bytes(1, BGSWire.bytes(1, fixed(1, 0x100000000000000) + fixed(2, low)))
+}
+@Test @MainActor func friendsSnapshotLegacyUsesOnlyReadOnlyMethodAndDiscardsNames() async throws {
+    let page = legacyFriend(42) + legacyFriend(43)
+    let transport = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: page)]).reduce(Data(), +))
+    let result = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us, protocolVersion: .legacy)
+    #expect(result.count == 2); #expect(result.allSatisfy { $0.battleTag == nil }); #expect(transport.cancelled)
+    #expect(transport.written.count == 3)
+    let packet = try #require(transport.written.last), prefix = [UInt8](packet.prefix(2))
+    let count = Int(prefix[0]) * 256 + Int(prefix[1])
+    let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(count)))
+    #expect(try BGSWire.uint(header, 11) == 0xa3ddb1bd)
+    #expect(try BGSWire.uint(header, 2) == 13)
+    #expect(try BGSWire.uint(header, 5) == 0)
+}
+@Test func friendsSnapshotLegacyRejectsDuplicateOrMissingEntityIDs() throws {
+    #expect(try LegacyFriendSnapshot.decode(Data()).isEmpty)
+    for data in [legacyFriend(42) + legacyFriend(42), legacyFriend(0), BGSWire.bytes(1, Data())] {
+        #expect(throws: (any Error).self) { try LegacyFriendSnapshot.decode(data) }
+    }
+}

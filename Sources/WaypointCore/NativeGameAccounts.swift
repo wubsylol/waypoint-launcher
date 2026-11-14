@@ -89,10 +89,14 @@ public final class NativeGameAccounts {
         }
     }
 
-    /// Experimental read-only v2 snapshot. Does not subscribe, set presence,
+    /// Experimental read-only snapshot using the selected protocol. Does not subscribe, set presence,
     /// mutate friendships, send messages, or persist any returned friend data.
-    public func friends(token: LoginToken, build: UInt64, region: Region) async throws -> [BattleNetFriend] {
+    public func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol = .current) async throws -> [BattleNetFriend] {
         try await authenticated(token: token, build: build, region: region) {
+            if protocolVersion == .legacy {
+                let response = try await call(hash: 0xa3ddb1bd, method: 13, isFriendsRequest: true)
+                return try LegacyFriendSnapshot.decode(response)
+            }
             var result: [BattleNetFriend] = [], seenIDs = Set<String>(), continuations = Set<UInt64>()
             var continuation: UInt64 = 0
             for _ in 0..<20 {

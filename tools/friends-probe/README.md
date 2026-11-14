@@ -16,8 +16,10 @@ Forever build metadata and performs native authentication with owner checks.
 No saved token, login preference, installation or account selection is modified.
 Keychain access may prompt for approval. No new sign-in is requested by this tool.
 
-It calls only friends v2 `GetFriends` method 5 (original service hash
-`0x5869BE8C`; schema name hash is `0x9D059A2F`) after connection/authentication.
+The core can explicitly select either read-only friends v2 `GetFriends` method
+5 (original hash `0x5869BE8C`; name hash `0x9D059A2F`) or legacy friends v1
+`GetFriendList` method 13 (original hash `0xA3DDB1BD`). Probe version 0.0.3
+explicitly selects the legacy route. There is no automatic fallback or retry.
 Continuation pages are bounded to 20, total friends to 1000, with the existing
 35-second native deadline and frame bounds. It does not subscribe, set presence,
 send/receive chat, add/remove friends or accept invitations. Merely opening an
@@ -76,3 +78,31 @@ No new RPC, fallback, subscription or automatic retry is introduced. A synthetic
 post-authentication 3025 reply tests this distinction. A fresh live result is
 still needed to locate the actual failure stage; keep the other Mac’s download
 running during that test.
+
+
+## Confirmed v2 refusal and legacy test
+
+The user’s diagnostics-2 run reported: authentication succeeded, then the
+correlated friends method returned 3025 (`ERROR_RPC_METHOD_DISABLED`). This
+establishes that the v2 call is disabled for the tested session, not that the
+saved login failed. It does not establish a conflict with the other Mac.
+
+Version 0.0.3 tries the distinct legacy v1 GetFriendList read-only method with
+an empty request (its agent_id field is optional). It does not subscribe or
+modify friendship state. Public schema references:
+
+- https://github.com/TrinityCore/TrinityCore/blob/master/src/server/proto/Client/friends_service.pb.h
+- https://github.com/TrinityCore/TrinityCore/blob/master/src/server/proto/Client/friends_service.pb.cc
+- https://github.com/TrinityCore/TrinityCore/blob/master/src/server/proto/Client/friends_types.pb.h
+- https://github.com/TrinityCore/TrinityCore/blob/master/src/server/proto/Client/entity_types.pb.h
+
+The legacy response has repeated Friend entries in field 1, each with an
+EntityId in field 1 (optional fixed64 high1/low2). The parser requires nonzero
+low and unique full entity references. It does not assume an entity’s high bits
+or turn arbitrary attributes into names. The UI shows only a count and generic
+friend rows, because this response has no dedicated BattleTag field. Empty
+results alone do not prove correct enumeration against the expected account.
+
+18 targeted synthetic/native regression checks pass, including fixed64 legacy
+entity parsing and exact read-only dispatch. Legacy live access is still
+unproven. Keep the other Mac’s download running; close WoW before any new test.
