@@ -33,7 +33,7 @@ public final class NativeGameAccounts {
         self.transport = transport; self.timeout = timeout
     }
     public func cancel() { closed = true; transport.cancel() }
-    private func withAuthenticatedSession<T>(token: LoginToken, build: UInt64, region: Region, operation: () async throws -> T) async throws -> T {
+    private func withAuthenticatedSession<T>(token: LoginToken, build: UInt64, region: Region, titleID: UInt64 = 0x576f57, platform: String = "Mc64", operation: () async throws -> T) async throws -> T {
         guard region == .us else { throw Failure.unsupported }
         guard let owner = UInt64(token.accountID), owner > 0, build > 0 else { throw Failure.owner }
         expectedOwner = owner
@@ -49,7 +49,7 @@ public final class NativeGameAccounts {
             let (header, _) = try await receive()
             guard try W.uint(header, 1) == 254, try W.uint(header, 3) == 0,
                   try W.uint(header, 6, default: 0) == 0 else { throw Failure.unavailable }
-            let request = W.number(1, 5_730_135) + W.text(2, "Mc64") + W.text(3, "enUS")
+            let request = W.number(1, titleID) + W.text(2, platform) + W.text(3, "enUS")
                 + W.number(4, build) + W.bytes(10, W.text(1, token.value))
             _ = try await call(hash: 0xc02f8216, method: 1, body: request)
             while !loggedIn {
@@ -65,6 +65,31 @@ public final class NativeGameAccounts {
         try await withAuthenticatedSession(token: token, build: build, region: region) {
             guard let profile = authenticatedProfile else { throw Failure.unavailable }
             return profile
+        }
+    }
+
+    /// Experimental v2 GenerateAuthToken request; never used by normal launches.
+    /// Schema/method verified against installed Forever static descriptors.
+    public enum CredentialTarget: Sendable {
+        case worldOfWarcraft, diabloIV
+        var titleID: UInt64 { self == .worldOfWarcraft ? 0x576f57 : 0x46656e }
+    }
+    public func requestCredential(token: LoginToken, build: UInt64, region: Region,
+                                  target: CredentialTarget = .diabloIV) async throws -> LoginToken {
+        try await withAuthenticatedSession(token: token, build: build, region: region) {
+            let response = try await call(hash: 0xc02f8216, method: 3, body: W.number(1, target.titleID))
+            let data = try W.data(W.decode(response), 1)
+            guard data.count <= 256, let text = String(data: data, encoding: .utf8),
+                  let issued = LoginToken(text), issued.accountID == String(expectedOwner) else { throw Failure.owner }
+            return issued
+        }
+    }
+
+    /// Isolated target-service acceptance check; no game licence/session selection.
+    public func validateDiabloIVCredential(token: LoginToken, build: UInt64, region: Region) async throws {
+        try await withAuthenticatedSession(token: token, build: build, region: region,
+                                           titleID: 0x46656e, platform: "Wn64") {
+            guard authenticatedProfile?.accountID == token.accountID else { throw Failure.owner }
         }
     }
 
