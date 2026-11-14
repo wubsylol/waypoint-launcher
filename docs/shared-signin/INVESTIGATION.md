@@ -120,3 +120,15 @@ WTCG credential, and a subsequent Hearthstone native Logon using the current
 public `hsb` build returned the expected owner. No new sign-in page was required.
 The diagnostic discarded its tickets and did not launch or install Hearthstone.
 Actual Hearthstone main-menu acceptance remains pending.
+
+## Accepted Hearthstone game launch and uninstall-dialog repair
+
+The user confirmed Hearthstone launched successfully through the preview shared
+sign-in route without another login. This establishes real cross-game launch
+acceptance for the tested account/build, not paid-title entitlement.
+
+The subsequent uninstall attempt failed before the confirmation appeared.
+AppKit's menu exception stack identified UninstallAlert.accessory calling
+NSStackView.setCustomSpacing after a checkbox not arranged for games with no
+install-folder user files. Revision 3 only applies that spacing when the checkbox
+is present; confirmation, file preservation and move-to-Trash logic are unchanged.

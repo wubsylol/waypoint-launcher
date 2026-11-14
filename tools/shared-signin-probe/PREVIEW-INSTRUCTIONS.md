@@ -1,4 +1,4 @@
-# Shared Sign-In Preview — Apple silicon, revision 2
+# Shared Sign-In Preview — Apple silicon, revision 3
 
 This experimental build supports WoW → Hearthstone (native macOS) and WoW →
 Diablo IV (Windows/Wine). It is ad-hoc signed, not notarized; stable Waypoint
@@ -29,3 +29,7 @@ sign-in test. Hearthstone tests cross-game login, not paid-game ownership or an
 active WoW subscription. Entitlement filtering remains a separate investigation.
 No friend functionality is included. Real game acceptance must be tested beyond
 server authentication. Mainline Waypoint remains unchanged.
+
+Revision 3 also fixes an AppKit exception that prevented uninstall confirmation
+from appearing for games without install-folder user files, including Hearthstone.
+The confirmation and existing move-to-Trash behavior are retained.

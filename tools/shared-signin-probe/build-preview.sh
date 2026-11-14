@@ -11,12 +11,12 @@ trap 'rm -rf "$stage"' EXIT
 folder="$stage/Waypoint Shared Sign-In Preview"
 app="$folder/Waypoint.app"
 mkdir -p "$folder"
-VERSION=1.2.5 BUILD_NUMBER=12 BUNDLE_ID=io.wubs.waypoint-review SIGN_IDENTITY=- SPARKLE_FEED='' \
+VERSION=1.2.5 BUILD_NUMBER=13 BUNDLE_ID=io.wubs.waypoint-review SIGN_IDENTITY=- SPARKLE_FEED='' \
     WINDOWS_RUNTIME="$repo/Resources/WindowsRuntime" WINDOWS_EXPERIMENTAL=0 APP_PATH="$app" "$repo/scripts/bundle.sh"
 python3 - "$app" <<'PY'
 import pathlib,plistlib,subprocess,sys
 app=pathlib.Path(sys.argv[1]); plist=app/'Contents/Info.plist'
-info=plistlib.loads(plist.read_bytes());info['WaypointSharedSignInPreview']=True;info['WaypointSharedSignInPreviewRevision']=2
+info=plistlib.loads(plist.read_bytes());info['WaypointSharedSignInPreview']=True;info['WaypointSharedSignInPreviewRevision']=3
 info['CFBundleDisplayName']='Waypoint Shared Sign-In Preview'
 plist.write_bytes(plistlib.dumps(info))
 binary=app/'Contents/MacOS/Waypoint'
