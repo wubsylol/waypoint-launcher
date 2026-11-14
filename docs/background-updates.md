@@ -1,6 +1,6 @@
 # Background updates and macOS integration
 
-Settings contains automatic checks, update notifications, menu-bar visibility, Dock visibility, and Start at login. Menu bar, hidden Dock, notifications, and login startup remain opt-in. Hiding the Dock explicitly enables the menu bar. Removing or disabling the menu-bar item restores regular Dock presence. A normal icon click opens the library. Right-click or Control-click opens the quick-action menu, including Settings and Quit.
+Settings contains automatic checks, update notifications, menu-bar visibility, Dock visibility, and Start at login. Menu bar, hidden Dock, notifications, and login startup remain opt-in. Hiding the Dock explicitly enables the menu bar. Removing or disabling the menu-bar item restores regular Dock presence. A normal icon click toggles the library window: closes it if visible, reopens it if closed, and restores it if minimized. The red close button also closes only its window, never the application. Right-click or Control-click opens the quick-action menu, including Settings and Quit.
 
 While Waypoint is running, installed-game version metadata is checked on startup, activation, wake, and a 30-minute timer (15-minute minimum spacing except explicit/installation-completion checks). Checks coalesce concurrent requests and queue a forced follow-up after a completed download. These checks do not authenticate or alter any game files. Offline errors keep the last known result and retry on a later check.
 

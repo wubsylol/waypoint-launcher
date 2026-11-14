@@ -75,10 +75,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     // MARK: Library window
 
+    /// The status icon toggles only the library window, never the application.
+    /// The red close button uses the same window-close path; background work lives on.
+    @objc func toggleLibrary(_ sender: Any?) {
+        if let window = libraryWindow, window.isVisible, !window.isMiniaturized, !NSApp.isHidden {
+            window.performClose(sender)
+        } else {
+            showLibrary(sender)
+        }
+    }
+
     @objc func showLibrary(_ sender: Any?) {
         let window = libraryWindow ?? makeLibraryWindow()
         libraryWindow = window
         NSApp.activate(ignoringOtherApps: true)
+        if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
     }
 

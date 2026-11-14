@@ -40,7 +40,7 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked(_:))
             item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            item.button?.toolTip = "Open Waypoint (right-click for quick actions)"
+            item.button?.toolTip = "Show or hide Waypoint (right-click for quick actions)"
             // ⌘-dragging the item out of the menu bar turns the setting off.
             // AppKit remembers such a removal, so opting back in has to make
             // the item visible again explicitly.
@@ -67,7 +67,7 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
            let quickActions {
             NSMenu.popUpContextMenu(quickActions, with: event, for: sender)
         } else {
-            NSApp.sendAction(#selector(AppDelegate.showLibrary(_:)), to: nil, from: sender)
+            NSApp.sendAction(#selector(AppDelegate.toggleLibrary(_:)), to: nil, from: sender)
         }
     }
 

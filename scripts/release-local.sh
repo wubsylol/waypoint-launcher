@@ -4,7 +4,7 @@ set -euo pipefail
 repo="${0:A:h:h}"
 label="1.2.9-wubs.1"
 version="1.2.9"
-build_number="17"
+build_number="18"
 destination="${DESTINATION:-$repo/dist/local/$label}"
 if [[ -n "$(git -C "$repo" status --porcelain)" ]]; then
     print -u2 "Commit source changes before building a release."
