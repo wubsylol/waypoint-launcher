@@ -335,3 +335,27 @@ No friends were returned. A client-context source alone is not sufficient for
 this route. No application-session creation request was made. UI inspection
 stalled during the attempt; the user supplied the final status, and no duplicate
 lookup was initiated while awaiting it.
+
+## Authenticated-context session preflight (version0.0.13)
+
+Before considering session creation, this mode queries existing session state
+using the owner-verified logon Header.client_id rather than transport CIID.
+Only rawGetSessionState method5/hash0x7B37D770/emptybody is sent after login.
+No creation, restoration, destruction, friends or subscription call. Replies
+with a context header must match; returned session owner must match. Refusal
+leaves existence unknown and is not permission to replace another session.
+Defaultfalse preserves older diagnostics. Mixed context sources fail before
+network.34 targeted checks pass; the new fixture asserts exact3requests and
+correct actualauthcontext vs transport ID, owner-check and closure behavior.
+
+Version0.0.13 live result: correlated GetSessionState status7 using the actual
+owner-verified logon client context. Session identity/existence remained unknown.
+The user reported the result and it was verified in the version13 window. No
+session creation/restoration/destruction request or friends call was sent.
+
+## Parked at the user's request
+
+On2026-11-14 the user asked to preserve this as a side project and return to the
+mainline client. Stop live work here. See docs/social-service/PARKED.md for the
+restart boundary. No CreateSession experiment was implemented or run. Do not
+merge this experimental branch into main as part of returning to the client.

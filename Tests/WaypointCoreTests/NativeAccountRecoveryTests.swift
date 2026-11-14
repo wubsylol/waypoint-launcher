@@ -415,3 +415,18 @@ private func authenticatedContextReplies(logonID: String? = "synthetic-authentic
     } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled) }
     catch { Issue.record("Expected fail-closed context identity mismatch") }
 }
+
+@Test @MainActor func sessionDiagnosticsUsesVerifiedLogonContextWithoutCreatingSession() async throws {
+    let state = BGSWire.bytes(1, BGSWire.bytes(1, BGSWire.number(1, 123)))
+    let replies = [accountFrame(token: 0, body: BGSWire.text(9, "different-transport-id")), accountFrame(token: 1),
+        accountFrame(token: 99, body: BGSWire.bytes(2, BGSWire.number(1, 123)), service: 0, method: 1, hash: 0x9da8116b, clientID: "verified-context"),
+        accountFrame(token: 2, body: state)]
+    let transport = AccountTestTransport(replies.reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us, useAuthenticatedClientID: true)
+    #expect(report.serverSessionIDPresent == true); #expect(transport.cancelled); #expect(transport.written.count == 3)
+    let packet = try #require(transport.written.last), prefix = [UInt8](packet.prefix(2))
+    let length = Int(prefix[0]) * 256 + Int(prefix[1]), h = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+    #expect(try BGSWire.data(h, 13) == Data("verified-context".utf8))
+    #expect(try BGSWire.uint(h, 11) == 0x7b37d770); #expect(try BGSWire.uint(h, 2) == 5)
+    #expect(packet.dropFirst(2 + length).isEmpty)
+}

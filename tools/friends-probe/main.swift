@@ -11,13 +11,13 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 480), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Read-only Experiment (authenticated friends context 12)"
+        window.title = "Waypoint Friends — Read-only Experiment (authenticated session preflight 13)"
         window.isReleasedWhenClosed = false; window.delegate = self
-        let title = NSTextField(labelWithString: "Battle.net authenticated-context friends test")
+        let title = NSTextField(labelWithString: "Battle.net authenticated-context session preflight")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. Uses only the logical client identifier supplied by the owner-verified logon callback for the original v2 friends lookup. Sign-in is unchanged. It sends no session creation, restoration or destruction requests, changes no friendships and never shows the connection identifier.")
+        let explanation = NSTextField(wrappingLabelWithString: "Uses the selected Waypoint account’s saved WoW login. Close WoW first. Does not send messages, change friendships, or save the returned list. Queries existing session state using the client identifier from the owner-verified logon. It does not create or replace a session through a session API. It sends no session creation, restoration or destruction requests, changes no friendships and never shows the connection identifier.")
         explanation.textColor = .secondaryLabelColor
-        button = NSButton(title: "Read friends in authenticated context", target: self, action: #selector(readFriends))
+        button = NSButton(title: "Inspect existing authenticated session", target: self, action: #selector(readFriends))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelRead))
         let actions = NSStackView(views: [button, cancel, NSView()]); actions.spacing = 10
         output.isEditable = false; output.isRichText = false; output.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -42,7 +42,7 @@ import WaypointCore
         guard let account = AccountList.load(from: defaults).active else { status.stringValue = "Select an account in Waypoint first."; return }
         let vault = TokenVault(service: "io.wubs.waypoint-review: Battle.net login tokens")
         guard let token = vault.token(account: account.id, codename: "WoW"), token.accountID == account.id else { status.stringValue = "No saved WoW login is available. This test will not request another sign-in."; return }
-        button.isEnabled = false; status.stringValue = "Checking public build metadata, then querying friends in the authenticated context…"
+        button.isEnabled = false; status.stringValue = "Checking public build metadata, then querying existing session state in the authenticated context…"
         task = Task { [weak self] in
             guard let self else { return }
             defer { self.task = nil; self.button.isEnabled = true }
@@ -55,20 +55,18 @@ import WaypointCore
                 guard AccountList.load(from: self.defaults).activeID == account.id, !self.gameIsRunning(), version.buildID > 0, version.region == "us" else {
                     self.status.stringValue = "Account changed, WoW opened, or build metadata was unavailable. No connection made."; return
                 }
-                let friends = try await NativeGameAccounts().friends(token: token, build: UInt64(version.buildID), region: .us, protocolVersion: .authenticatedContext)
+                let report = try await NativeGameAccounts().sessionDiagnostics(token: token, build: UInt64(version.buildID), region: .us, useAuthenticatedClientID: true)
                 try Task.checkCancellation()
                 guard AccountList.load(from: self.defaults).activeID == account.id else { self.status.stringValue = "Account changed; result discarded."; return }
-                self.output.string = friends.enumerated().map { $0.element.battleTag ?? "Friend \($0.offset + 1) — BattleTag unavailable" }.joined(separator: "\n")
-                self.status.stringValue = "Authenticated context returned \(friends.count) friends. Connection closed."
+                func yesNo(_ value: Bool?) -> String { value.map { $0 ? "yes" : "no" } ?? "unknown" }
+                self.output.string = "Existing-session query status: \(report.sessionQueryStatus)\nOwner-verified session identity returned: \(yesNo(report.serverSessionIDPresent))"
+                self.status.stringValue = "Authenticated session preflight complete. No session creation request sent; connection closed."
             } catch is CancellationError { self.status.stringValue = "Cancelled. No saved login changed." }
-            catch FriendSnapshotFailure.requestRejected(let code) {
-                self.status.stringValue = "Signed in successfully; authenticated-context friends request refused (\(code)). Saved login unchanged."
-            }
             catch let error as AuthenticationContextFailure { self.status.stringValue = error.localizedDescription }
-            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Connection/authentication refused (status \(code)); friends lookup was not completed. Saved login unchanged." }
+            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Connection/authentication refused (status \(code)); session preflight was not completed. Saved login unchanged." }
             catch let error as SessionDiagnosticFailure { self.status.stringValue = error.localizedDescription + " Saved login unchanged." }
             catch NativeGameAccounts.Failure.owner { self.status.stringValue = "Account identity mismatch. Result discarded." }
-            catch { self.status.stringValue = "Could not complete the authenticated-context friends test. Saved login unchanged." }
+            catch { self.status.stringValue = "Could not complete the authenticated session preflight. Saved login unchanged." }
         }
     }
     @objc private func cancelRead() { task?.cancel(); output.string = "" }

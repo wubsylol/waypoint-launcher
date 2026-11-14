@@ -169,9 +169,11 @@ public final class NativeGameAccounts {
     }
     /// Read-only connection metadata plus GetSessionState. Sends no session
     /// creation, restoration, destruction or mark-alive request.
-    public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region, includeConnectionIdentity: Bool = false) async throws -> NativeSessionDiagnostics {
+    public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region, includeConnectionIdentity: Bool = false, useAuthenticatedClientID: Bool = false) async throws -> NativeSessionDiagnostics {
+        guard !(includeConnectionIdentity && useAuthenticatedClientID) else { throw Failure.unsupported }
         recordsDiagnostics = true
         includesConnectionIdentity = includeConnectionIdentity
+        if useAuthenticatedClientID { inspectsAuthenticationContext = true; usesAuthenticatedClientID = true }
         do {
             return try await authenticated(token: token, build: build, region: region) {
                 do {
@@ -254,7 +256,7 @@ public final class NativeGameAccounts {
     private func call(hash: UInt32, method: UInt64, body: Data = Data(), replyKind: ReplyKind = .native) async throws -> Data {
         let token = sequence; sequence += 1
         var clientID: String?
-        if replyKind == .friends, usesAuthenticatedClientID {
+        if (replyKind == .friends || replyKind == .sessionDiagnostic), usesAuthenticatedClientID {
             guard loggedIn, let rawIdentity = logonNotificationClientID,
                   let identity = String(data: rawIdentity, encoding: .utf8),
                   !identity.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
@@ -271,7 +273,7 @@ public final class NativeGameAccounts {
             let (header, response) = try await receive()
             if try W.uint(header, 1) == 254 {
                 guard try W.uint(header, 3) == token else { throw Failure.unavailable }
-                if replyKind == .friends, usesAuthenticatedClientID, header[13] != nil {
+                if (replyKind == .friends || replyKind == .sessionDiagnostic), usesAuthenticatedClientID, header[13] != nil {
                     guard boundedHeaderClientID(header) == logonNotificationClientID else { throw Failure.owner }
                 }
                 let status = try W.uint(header, 6, default: 0)

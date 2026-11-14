@@ -55,6 +55,6 @@ public struct AuthenticationContextDiagnostics: Equatable, Sendable {
 public enum AuthenticationContextFailure: Error, LocalizedError {
     case missingClientID
     public var errorDescription: String? {
-        "No usable client identifier was supplied by the owner-verified logon. Friends lookup was not attempted."
+        "No usable client identifier was supplied by the owner-verified logon. The context-dependent request was not attempted."
     }
 }
