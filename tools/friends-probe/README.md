@@ -260,3 +260,32 @@ header; the correlated GetSessionState status remained7. Session existence is
 still unknown. This rules out that particular session-query-header control as
 a fix, not Header.client_id for every social method. Authentication completed;
 no new session-creation/restoration/destruction request was sent.
+
+## Direct friends identity-header control (version0.0.10)
+
+The existing-session query stayed7 with or without CIID. That did not test
+whether the same header affects friends routing. Version10 therefore selects
+raw v2 GetFriends method5/hash0x5869BE8C with explicitincludeConnectionIdentity.
+Only Header.client_id13 carries the bounded server-provided current connection
+identity. Connect/auth packets, initial body and raw method remain identical.
+No session query, creation, restoration, subscription or mutation is requested
+by this UI mode. Defaults remain without header. Names, if returned, appear only
+in the local UI; CID and raw friend IDs are not displayed. One bounded lookup
+allows the existing page/count/deadline limits, with immediate stop on refusal.
+
+28 targeted checks pass, including full packet parity for original v2 with
+and without the header. The mapping remains a hypothesis. Result follows.
+
+Version0.0.10 live result: the window and the user confirmed owner-verified
+sign-in followed by correlated GetFriends status3025 with the identity header.
+No list returned. Adding current connection identity is therefore not sufficient
+for the tested social route. It does not show that Header.client_id is never
+used or that no other authorized service exists.
+
+Pause additional live parameter variants here. Current flags and CIID-header
+controls did not restore social access; proper SDK session setup/routing and
+social authorization need further implementation/evidence. Do not turn the next
+step into an unattended CreateSession request. No explicit Create/Restore/
+DestroySession request, messaging or friendship mutation was tested in this
+round. The user-approved system Keychain prompt was not visually inspected;
+the probe itself has no password-entry form and only reads the existing item.

@@ -16,8 +16,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>io.wubs.waypoint-friends-probe</string>
 <key>CFBundleName</key><string>Waypoint Friends Probe</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.0.9</string>
-<key>CFBundleVersion</key><string>9</string>
+<key>CFBundleShortVersionString</key><string>0.0.10</string>
+<key>CFBundleVersion</key><string>10</string>
 </dict></plist>
 PLIST
 xattr -cr "$app"

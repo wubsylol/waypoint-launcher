@@ -119,8 +119,10 @@ public final class NativeGameAccounts {
     /// Experimental friends read using the selected protocol. The explicit
     /// subscription mode closes after its initial snapshot. Does not set presence,
     /// mutate friendships, send messages, or persist returned friend data.
-    public func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol = .current) async throws -> [BattleNetFriend] {
-        try await authenticated(token: token, build: build, region: region) {
+    public func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol = .current, includeConnectionIdentity: Bool = false) async throws -> [BattleNetFriend] {
+        if includeConnectionIdentity { recordsDiagnostics = true; includesConnectionIdentity = true }
+        return try await authenticated(token: token, build: build, region: region) {
+            if recordsDiagnostics { diagnosticStage = .friendsQuery }
             if protocolVersion == .legacySubscription {
                 // Connection-scoped listener object 1. The initial subscription
                 // response contains the list in field 5; close immediately after
@@ -219,8 +221,8 @@ public final class NativeGameAccounts {
     private func call(hash: UInt32, method: UInt64, body: Data = Data(), replyKind: ReplyKind = .native) async throws -> Data {
         let token = sequence; sequence += 1
         var clientID: String?
-        if replyKind == .sessionDiagnostic, includesConnectionIdentity {
-            guard let identity = connectionIdentity else { throw SessionDiagnosticFailure.unavailable(.query) }
+        if (replyKind == .sessionDiagnostic || replyKind == .friends), includesConnectionIdentity {
+            guard let identity = connectionIdentity else { throw SessionDiagnosticFailure.unavailable(diagnosticStage) }
             clientID = identity
             diagnostics.connectionIdentityIncluded = true
         }

@@ -336,3 +336,25 @@ private func diagnosticReplies(queryBody: Data, owner: UInt64 = 123) -> [Data] {
         #expect(stage == .connectionMetadata); #expect(transport.written.count == 1); #expect(transport.cancelled)
     } catch { Issue.record("Missing control identity failed without metadata classification") }
 }
+
+@Test @MainActor func friendsSnapshotIdentityControlChangesOnlyOriginalV2Header() async throws {
+    var written: [[Data]] = []
+    for includeIdentity in [false, true] {
+        let replies = Array(diagnosticReplies(queryBody: Data()).prefix(3)) + [accountFrame(token: 2, body: friendPage(42, tag: "Synthetic#1234"))]
+        let transport = AccountTestTransport(replies.reduce(Data(), +))
+        let result = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us, includeConnectionIdentity: includeIdentity)
+        #expect(result.count == 1); #expect(transport.cancelled); #expect(transport.written.count == 3)
+        written.append(transport.written)
+    }
+    #expect(Array(written[0].prefix(2)) == Array(written[1].prefix(2)))
+    var headers: [BGSWire.Message] = []
+    for packet in written.map({ $0[2] }) {
+        let prefix = [UInt8](packet.prefix(2)), length = Int(prefix[0]) * 256 + Int(prefix[1])
+        let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+        #expect(try BGSWire.uint(header, 2) == 5); #expect(try BGSWire.uint(header, 11) == 0x5869be8c)
+        headers.append(header); #expect(packet.dropFirst(2 + length).isEmpty)
+    }
+    #expect(headers[0][13] == nil)
+    #expect(try BGSWire.data(headers[1], 13) == Data("synthetic-connection-id".utf8))
+    headers[1].removeValue(forKey: 13); #expect(headers[0] == headers[1])
+}

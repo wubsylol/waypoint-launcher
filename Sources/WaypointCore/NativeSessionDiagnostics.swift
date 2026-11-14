@@ -23,6 +23,7 @@ public enum SessionDiagnosticStage: String, Sendable {
     case connectionMetadata = "connection metadata"
     case authentication = "authentication"
     case query = "existing-session query"
+    case friendsQuery = "friends lookup"
     case response = "session reply parsing"
 }
 
