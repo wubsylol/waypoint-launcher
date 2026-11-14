@@ -131,3 +131,20 @@ bounded live test, not established facts. Unexpected callbacks still fail closed
 A synthetic response containing both max_friends field 1 and friends field 5
 checks the correct field and exact Subscribe dispatch, followed by connection
 closure. No automatic fallback to this mode occurs. The UI labels it explicitly.
+
+## Version 0.0.4 live result
+
+One user-authorized read attempt was run through the probe UI. The selected
+saved login authenticated, then the correlated legacy Subscribe reply returned
+3025 (`ERROR_RPC_METHOD_DISABLED`). No friends list was returned. The connection
+closed through the existing deferred cleanup. The other Mac’s download was not
+stopped or modified. No messages or friendship mutations were requested.
+
+All three tested methods (v2 GetFriends, v1 GetFriendList and v1 Subscribe) are
+therefore disabled for the tested session/routing. This does not prove friends
+or messaging are impossible, or identify whether the limitation is client/login
+scope, protocol version or service routing. Stop repeated live retries at this
+point. Investigate the current social client authentication and service path
+before any next network experiment. Running-game coexistence remains untested.
+
+19 targeted synthetic/native regression checks passed for version 0.0.4.
