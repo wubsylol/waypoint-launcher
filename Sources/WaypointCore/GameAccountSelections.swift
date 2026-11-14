@@ -1,6 +1,6 @@
 import Foundation
 
-/// A validated website choice, separate from Battle.net identity and authorization.
+/// A verified WoW licence choice, separate from Battle.net identity and authorization.
 public struct GameAccountSelection: Codable, Equatable, Sendable {
     public let accountID: String
     public let name: String
@@ -22,6 +22,14 @@ public struct GameAccountSelections: Codable, Sendable {
     public init() {}
     public func choice(owner: String, uid: String, region: String) -> GameAccountSelection? {
         entries.first { $0.owner == owner && $0.uid == uid && $0.region == region.lowercased() }?.choice
+            ?? defaultChoice(owner: owner, region: region)
+    }
+    /// A default applies only where an edition has no explicit saved choice.
+    public func defaultChoice(owner: String, region: String) -> GameAccountSelection? {
+        entries.first { $0.owner == owner && $0.uid == "*" && $0.region == region.lowercased() }?.choice
+    }
+    public mutating func selectDefault(_ choice: GameAccountSelection, owner: String, region: String) {
+        select(choice, owner: owner, uid: "*", region: region)
     }
     public mutating func select(_ choice: GameAccountSelection, owner: String, uid: String, region: String) {
         entries.removeAll { $0.owner == owner && $0.uid == uid && $0.region == region.lowercased() }

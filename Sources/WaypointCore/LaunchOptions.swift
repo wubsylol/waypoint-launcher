@@ -49,6 +49,9 @@ public struct LaunchOptions {
         set(regionKey, region.launchOptionValue as CFString)
         if let locale { set(localeKey, locale as CFString) }
         if let gameAccount { set(gameAccountKey, gameAccount as CFString) }
+        else if gameKey == "WoW" {
+            CFPreferencesSetAppValue(gameAccountKey as CFString, nil, preferencesDomain as CFString)
+        }
         guard CFPreferencesAppSynchronize(preferencesDomain as CFString) else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSLocalizedDescriptionKey: "Could not save net.battle preferences"])
         }

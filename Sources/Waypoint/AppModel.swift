@@ -144,6 +144,9 @@ final class AppModel {
     private var gameAccountChoices = GameAccountSelections.load() {
         didSet { gameAccountChoices.save() }
     }
+    private var gameAccountCatalogs = GameAccountCatalogs.load() {
+        didSet { gameAccountCatalogs.save() }
+    }
     private var isSelectingGameAccount = false
     private var isRefreshingNativeProfile = false
     private var profileFetches: Set<String> = []
@@ -935,11 +938,12 @@ final class AppModel {
                 phases[game.id] = .idle
                 return
             }
-            if plan.codename == "WoW", !plan.isWindows {
+            if plan.codename == "WoW", !plan.isWindows, plan.region == .us {
                 let owner = token.accountID
                 guard let identity = accountList[owner] else { phases[game.id] = .idle; return }
-                var choice = gameAccountChoices.choice(owner: owner, uid: game.id, region: plan.region.rawValue)
-                if choice == nil { choice = await chooseGameAccount(game, account: identity, region: plan.region, token: token) }
+                var choice = resolvedGameAccount(owner: owner, uid: game.id, region: plan.region)
+                let currentList = gameAccountCatalogs.accounts(owner: owner, region: plan.region.rawValue)
+                if choice == nil || currentList.map({ list in !list.contains { $0.accountID == choice?.accountID } }) == true { choice = await chooseGameAccount(game, account: identity, region: plan.region, token: token) }
                 guard let choice else { phases[game.id] = .idle; return }
                 guard choice.region.caseInsensitiveCompare(plan.region.rawValue) == .orderedSame else {
                     throw CocoaError(.validationMissingMandatoryProperty)
@@ -982,54 +986,129 @@ final class AppModel {
         }
     }
 
-    func selectedGameAccountName(for game: Game) -> String? {
-        guard let owner = activeAccount?.id,
-              let plan = try? GameLauncher.plan(for:game,region:regionOverride) else { return nil }
-        return gameAccountChoices.choice(owner:owner,uid:game.id,region:plan.region.rawValue)?.name
+    func effectiveGameRegion(for game: Game) -> String? {
+        (try? GameLauncher.plan(for: game, region: regionOverride).region.rawValue)
+            ?? regionOverride?.rawValue ?? game.install.region
     }
-    /// Explicit selection is available even when a remembered account already exists.
-    func selectGameAccount(for game: Game) async {
-        guard canPlay(game), GameCatalog.family(for: game.install.productCode) == .worldOfWarcraft else { return }
+
+    private func gameAccountContext(for game: Game) -> (Account, Region)? {
+        guard game.family == .worldOfWarcraft, game.install.platform == .macOS,
+              let account = activeAccount,
+              let plan = try? GameLauncher.plan(for: game, region: regionOverride) else { return nil }
+        return (account, plan.region)
+    }
+
+    private func resolvedGameAccount(owner: String, uid: String, region: Region) -> GameAccountSelection? {
+        guard let choice = gameAccountChoices.choice(owner: owner, uid: uid, region: region.rawValue) else { return nil }
+        return gameAccountCatalogs.accounts(owner: owner, region: region.rawValue)?.first { $0.accountID == choice.accountID } ?? choice
+    }
+
+    func selectedGameAccountName(for game: Game) -> String? {
+        guard let (account, region) = gameAccountContext(for: game) else { return nil }
+        return resolvedGameAccount(owner: account.id, uid: game.id, region: region)?.name
+    }
+
+    func knownGameAccounts(for game: Game) -> [GameAccountSelection] {
+        guard let (account, region) = gameAccountContext(for: game) else { return [] }
+        var choices = gameAccountCatalogs.accounts(owner: account.id, region: region.rawValue) ?? []
+        if let selected = resolvedGameAccount(owner: account.id, uid: game.id, region: region),
+           !choices.contains(where: { $0.accountID == selected.accountID }) { choices.append(selected) }
+        return choices
+    }
+
+    func isSelectedGameAccount(_ choice: GameAccountSelection, for game: Game) -> Bool {
+        guard let (account, region) = gameAccountContext(for: game) else { return false }
+        return resolvedGameAccount(owner: account.id, uid: game.id, region: region)?.accountID == choice.accountID
+    }
+
+    func isAvailableGameAccount(_ choice: GameAccountSelection, for game: Game) -> Bool {
+        guard let (account, region) = gameAccountContext(for: game) else { return false }
+        return gameAccountCatalogs.accounts(owner: account.id, region: region.rawValue)?
+            .contains { $0.accountID == choice.accountID } ?? true
+    }
+
+    func useGameAccount(_ choice: GameAccountSelection, for game: Game, owner: String) {
+        guard canPlay(game), let (account, region) = gameAccountContext(for: game), account.id == owner,
+              choice.region == region.rawValue,
+              gameAccountCatalogs.accounts(owner: owner, region: region.rawValue)?.contains(choice) == true else { return }
+        gameAccountChoices.select(choice, owner: owner, uid: game.id, region: region.rawValue)
+    }
+
+    func canRefreshGameAccounts(for game: Game) -> Bool {
+        guard canPlay(game), let (_, region) = gameAccountContext(for: game) else { return false }
+        return region == .us
+    }
+
+    /// Explicit refresh never opens another sign-in or changes a saved choice.
+    func refreshGameAccounts(for game: Game, owner: String) async {
+        guard canRefreshGameAccounts(for: game), let (account, region) = gameAccountContext(for: game), account.id == owner else { return }
         isSelectingGameAccount = true
         defer { isSelectingGameAccount = false }
-        guard let account = activeAccount else {
-            let alert = NSAlert(); alert.messageText = "Sign in to Battle.net first"
-            alert.informativeText = "Use the account menu, then choose Select account again."; alert.runModal(); return
-        }
         do {
-            let plan = try GameLauncher.plan(for:game,region:regionOverride)
-            guard let token = await token(for: plan, gameName: game.displayName, account: account,
-                                          activate: false, forceSignIn: false) else { return }
-            _ = await chooseGameAccount(game, account:account, region:plan.region, token: token)
-        } catch { phases[game.id] = .failed(errorMessage(error)) }
-    }
-    private func chooseGameAccount(_ game: Game, account: Account, region: Region, token: LoginToken) async -> GameAccountSelection? {
-        let previous = gameAccountChoices.choice(owner:account.id,uid:game.id,region:region.rawValue)
-        guard token.accountID == account.id else { return nil }
-        // A discovery connection is a separate game-service session. Avoid
-        // disrupting any open WoW client, even one outside this title.
-        refreshRunning()
-        guard !games.contains(where: { GameCatalog.family(for: $0.install.productCode) == .worldOfWarcraft && isRunning($0) }) else {
-            let alert = NSAlert(); alert.messageText = "Close World of Warcraft first"
-            alert.informativeText = "Account discovery creates a separate game session. Close WoW, then select an account again."
-            alert.runModal(); return nil
-        }
-        guard let choice = await GameAccountPicker().run(account:account,gameName:game.displayName,region:region,selected:previous, load: {
-            self.refreshRunning()
-            guard !self.games.contains(where: { GameCatalog.family(for: $0.install.productCode) == .worldOfWarcraft && self.isRunning($0) }) else {
-                throw NativeGameAccounts.Failure.gameRunning
+            guard let token = tokenVault.token(account: account.id, codename: "WoW"), token.accountID == account.id else {
+                throw NativeGameAccounts.Failure.owner
             }
-            _ = try GameLauncher.plan(for: game, region: region)
-            guard let appURL = game.appURL, let bundle = Bundle(url: appURL),
-                  let version = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
-                  let build = UInt64(version.split(separator: ".").last ?? "") else { throw NativeGameAccounts.Failure.unavailable }
-            let native = NativeGameAccounts()
-            let licences = try await native.discover(token: token, build: build, region: region)
-            if let profile = native.authenticatedProfile { self.accountList.setNativeProfile(profile, for: account.id) }
-            return licences
-        }) else { return nil }
-        // The caller's account/region snapshot owns this choice, not a newly selected identity.
-        gameAccountChoices.select(choice,owner:account.id,uid:game.id,region:region.rawValue)
+            _ = try await discoverGameAccounts(account: account, region: region, token: token)
+        } catch {
+            guard !Task.isCancelled else { return }
+            let alert = NSAlert(); alert.messageText = "Couldn’t refresh WoW accounts"
+            alert.informativeText = "\(errorMessage(error)) Your previous list and saved selections were kept. If no saved WoW login is available, sign in to WoW first."
+            alert.runModal()
+        }
+    }
+
+    private func discoverGameAccounts(account: Account, region: Region, token: LoginToken) async throws -> [GameAccount] {
+        guard region == .us else { throw NativeGameAccounts.Failure.unsupported }
+        guard token.accountID == account.id, accountList[account.id] != nil else { throw NativeGameAccounts.Failure.owner }
+        guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+            throw NativeGameAccounts.Failure.gameRunning
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false; config.timeoutIntervalForRequest = 10; config.timeoutIntervalForResource = 20
+        let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+        let version = try await VersionService(session: session).latest(product: "wowf", region: region)
+        guard version.buildID > 0, !Task.isCancelled else { throw NativeGameAccounts.Failure.unavailable }
+        guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+            throw NativeGameAccounts.Failure.gameRunning
+        }
+        let native = NativeGameAccounts()
+        let licences = try await native.discover(token: token, build: UInt64(version.buildID), region: region)
+        try Task.checkCancellation()
+        guard accountList[account.id] != nil else { throw NativeGameAccounts.Failure.owner }
+        let choices = licences.map { GameAccountSelection(accountID: $0.accountID, name: $0.name, region: $0.region) }
+        guard gameAccountCatalogs.cache(choices, owner: account.id, region: region.rawValue) else { throw NativeGameAccounts.Failure.unavailable }
+        if let profile = native.authenticatedProfile { accountList.setNativeProfile(profile, for: account.id) }
+        return licences
+    }
+
+    private func chooseInitialGameAccount(account: Account, region: Region, token: LoginToken) async {
+        guard gameAccountChoices.defaultChoice(owner: account.id, region: region.rawValue) == nil else { return }
+        guard let choice = await GameAccountPicker().run(account: account, gameName: "Default World of Warcraft account", region: region,
+            selected: nil, explanation: "This will be the default for your WoW editions. Each title can override it from its WoW account menu.",
+            load: { try await self.discoverGameAccounts(account: account, region: region, token: token) }) else { return }
+        guard accountList[account.id] != nil else { return }
+        gameAccountChoices.selectDefault(choice, owner: account.id, region: region.rawValue)
+    }
+
+    private func chooseGameAccount(_ game: Game, account: Account, region: Region, token: LoginToken) async -> GameAccountSelection? {
+        let previous = resolvedGameAccount(owner: account.id, uid: game.id, region: region)
+        guard token.accountID == account.id else { return nil }
+        let usesDefault = gameAccountChoices.defaultChoice(owner: account.id, region: region.rawValue) == nil
+        var firstLoad = true
+        guard let choice = await GameAccountPicker().run(account: account, gameName: game.displayName, region: region, selected: previous,
+            explanation: usesDefault ? "Choose your default WoW licence. Each title can override it from its WoW account menu." : nil,
+            load: {
+                if firstLoad {
+                    firstLoad = false
+                    if let cached = self.gameAccountCatalogs.accounts(owner: account.id, region: region.rawValue) {
+                        return cached.map { GameAccount(titleID: "5730135", accountID: $0.accountID, name: $0.name, region: $0.region) }
+                    }
+                }
+                return try await self.discoverGameAccounts(account: account, region: region, token: token)
+            }) else { return nil }
+        guard accountList[account.id] != nil else { return nil }
+        if usesDefault { gameAccountChoices.selectDefault(choice, owner: account.id, region: region.rawValue) }
+        else { gameAccountChoices.select(choice, owner: account.id, uid: game.id, region: region.rawValue) }
         return choice
     }
 
@@ -1117,6 +1196,7 @@ final class AppModel {
             return
         }
         Log.info(.auth, "token", nil, ["source": "login_window", "codename": target.codename])
+        let isNewIdentity = accountList[token.accountID] == nil
         let saved = await adopt(token, codename: target.codename, session: session, typedName: loginWindow.typedAccountName, verifiedProfile: loginWindow.verifiedProfile)
         if let replacing, token.accountID == replacing {
             if saved {
@@ -1131,6 +1211,9 @@ final class AppModel {
                 tokenVault.removeAll(account: replacing)
                 Log.notice(.auth, "all_tokens_removed")
             }
+        }
+        if isNewIdentity, target.codename == "WoW", target.region == .us, let account = accountList[token.accountID] {
+            await chooseInitialGameAccount(account: account, region: target.region, token: token)
         }
     }
 
@@ -1147,6 +1230,7 @@ final class AppModel {
         autoLoginStates.removeValue(forKey: account.id)
         accountList.remove(account.id)
         gameAccountChoices.remove(owner: account.id)
+        gameAccountCatalogs.remove(owner: account.id)
         tokenVault.removeAll(account: account.id)
         for codename in Set(InstallableProduct.all.map(\.codename)) {
             let options = LaunchOptions(gameKey: codename)
