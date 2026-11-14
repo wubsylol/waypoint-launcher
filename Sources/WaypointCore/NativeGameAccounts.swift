@@ -68,7 +68,7 @@ public final class NativeGameAccounts {
         }
     }
 
-    /// Experimental v2 GenerateAuthToken request; never used by normal launches.
+    /// Owner-verified v2 GenerateAuthToken request for supported cross-game sign-in.
     /// Schema/method verified against installed Forever static descriptors.
     public enum CredentialTarget: Sendable {
         case worldOfWarcraft, diabloIV, hearthstone
@@ -85,9 +85,9 @@ public final class NativeGameAccounts {
             switch self { case .worldOfWarcraft: "wowf"; case .diabloIV: "fenris"; case .hearthstone: "hsb" }
         }
         var platform: String { self == .diabloIV ? "Wn64" : "Mc64" }
-        /// Only these cross-game routes are enabled in the real-launch preview.
-        public init?(previewCodename: String) {
-            switch previewCodename { case "Fen": self = .diabloIV; case "WTCG": self = .hearthstone; default: return nil }
+        /// Only these cross-game routes have been enabled and validated.
+        public init?(sharedCodename: String) {
+            switch sharedCodename { case "Fen": self = .diabloIV; case "WTCG": self = .hearthstone; default: return nil }
         }
     }
     public func requestCredential(token: LoginToken, build: UInt64, region: Region,

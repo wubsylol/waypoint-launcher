@@ -220,10 +220,10 @@ private func nativeProfileReplies(tag: String? = "Example#1234", owner: UInt64 =
     #expect(try BGSWire.data(body, 2) == Data("Mc64".utf8))
     #expect(validation.sends == 2); #expect(validation.cancelled); #expect(exchange.cancelled)
 }
-@Test func sharedPreviewOnlyRoutesExplicitlySupportedCrossGameTargets() {
-    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "WTCG") == .hearthstone)
-    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "Fen") == .diabloIV)
-    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "WoW") == nil)
-    #expect(NativeGameAccounts.CredentialTarget(previewCodename: "Pro") == nil)
+@Test func sharedSignInOnlyRoutesExplicitlySupportedCrossGameTargets() {
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "WTCG") == .hearthstone)
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "Fen") == .diabloIV)
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "WoW") == nil)
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "Pro") == nil)
     #expect(NativeGameAccounts.CredentialTarget.hearthstone.productCode == "hsb")
 }

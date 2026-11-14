@@ -132,3 +132,15 @@ AppKit's menu exception stack identified UninstallAlert.accessory calling
 NSStackView.setCustomSpacing after a checkbox not arranged for games with no
 install-folder user files. Revision 3 only applies that spacing when the checkbox
 is present; confirmation, file preservation and move-to-Trash logic are unchanged.
+
+## Promotion to personal mainline
+
+After the successful Hearthstone launch and uninstall repair, the user authorized
+promotion. Mainline reuses a cached target ticket first, then attempts the proven
+WoW→WTCG/Fen route only for the expected owner in Americas with a saved WoW
+source. Missing sources, other regions and other games retain normal direct
+sign-in; forced reauthentication bypasses shared authorization. Preview bundles
+still force the exchange ahead of cached target tickets as a test control.
+Failure preserves authorization and points to the explicit direct sign-in action.
+Generated tickets are not added to the token vault. Release 1.2.6 records the
+remaining Diablo IV real-launch and paid-entitlement limitations.
