@@ -21,6 +21,7 @@ public final class NativeGameAccounts {
     private typealias W = BGSWire
     private var recordsDiagnostics = false
     private var inspectsAuthenticationContext = false
+    private var usesAuthenticatedClientID = false
     private var authenticationReplyHasClientID = false
     private var logonNotificationHasClientID = false
     private var authenticationReplyClientID: Data?
@@ -125,6 +126,12 @@ public final class NativeGameAccounts {
     /// subscription mode closes after its initial snapshot. Does not set presence,
     /// mutate friendships, send messages, or persist returned friend data.
     public func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol = .current, includeConnectionIdentity: Bool = false) async throws -> [BattleNetFriend] {
+        if protocolVersion == .authenticatedContext {
+            guard !includeConnectionIdentity else { throw Failure.unsupported }
+            recordsDiagnostics = true
+            inspectsAuthenticationContext = true
+            usesAuthenticatedClientID = true
+        }
         if includeConnectionIdentity { recordsDiagnostics = true; includesConnectionIdentity = true }
         return try await authenticated(token: token, build: build, region: region) {
             if recordsDiagnostics { diagnosticStage = .friendsQuery }
@@ -247,7 +254,14 @@ public final class NativeGameAccounts {
     private func call(hash: UInt32, method: UInt64, body: Data = Data(), replyKind: ReplyKind = .native) async throws -> Data {
         let token = sequence; sequence += 1
         var clientID: String?
-        if (replyKind == .sessionDiagnostic || replyKind == .friends), includesConnectionIdentity {
+        if replyKind == .friends, usesAuthenticatedClientID {
+            guard loggedIn, let rawIdentity = logonNotificationClientID,
+                  let identity = String(data: rawIdentity, encoding: .utf8),
+                  !identity.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+                throw AuthenticationContextFailure.missingClientID
+            }
+            clientID = identity
+        } else if (replyKind == .sessionDiagnostic || replyKind == .friends), includesConnectionIdentity {
             guard let identity = connectionIdentity else { throw SessionDiagnosticFailure.unavailable(diagnosticStage) }
             clientID = identity
             diagnostics.connectionIdentityIncluded = true
@@ -257,6 +271,9 @@ public final class NativeGameAccounts {
             let (header, response) = try await receive()
             if try W.uint(header, 1) == 254 {
                 guard try W.uint(header, 3) == token else { throw Failure.unavailable }
+                if replyKind == .friends, usesAuthenticatedClientID, header[13] != nil {
+                    guard boundedHeaderClientID(header) == logonNotificationClientID else { throw Failure.owner }
+                }
                 let status = try W.uint(header, 6, default: 0)
                 guard status == 0 else {
                     switch replyKind {

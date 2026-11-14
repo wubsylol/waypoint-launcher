@@ -43,7 +43,7 @@ public enum FriendSnapshotFailure: Error {
 
 
 public enum FriendSnapshotProtocol: Sendable {
-    case current, currentClientCall, legacy, legacySubscription
+    case current, currentClientCall, authenticatedContext, legacy, legacySubscription
 }
 
 /// Legacy schema has entity references and attributes, not a dedicated BattleTag.

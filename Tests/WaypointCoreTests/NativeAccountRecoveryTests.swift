@@ -382,3 +382,36 @@ private func diagnosticReplies(queryBody: Data, owner: UInt64 = 123) -> [Data] {
     } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled); #expect(transport.written.count == 2) }
     catch { Issue.record("Expected owner validation before context report") }
 }
+
+
+private func authenticatedContextReplies(logonID: String? = "synthetic-authenticated-id", replyID: String? = nil) -> [Data] {
+    [accountFrame(token: 0, body: BGSWire.text(9, "different-transport-id")), accountFrame(token: 1),
+     accountFrame(token: 99, body: BGSWire.bytes(2, BGSWire.number(1, 123)), service: 0, method: 1, hash: 0x9da8116b, clientID: logonID),
+     accountFrame(token: 2, body: friendPage(42, tag: "Synthetic#1234"), clientID: replyID)]
+}
+@Test @MainActor func friendsSnapshotUsesOwnerVerifiedLogonIDNotTransportID() async throws {
+    let transport = AccountTestTransport(authenticatedContextReplies().reduce(Data(), +))
+    let result = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us, protocolVersion: .authenticatedContext)
+    #expect(result.count == 1); #expect(transport.written.count == 3); #expect(transport.cancelled)
+    let packet = try #require(transport.written.last), prefix = [UInt8](packet.prefix(2))
+    let length = Int(prefix[0]) * 256 + Int(prefix[1]), header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+    #expect(try BGSWire.data(header, 13) == Data("synthetic-authenticated-id".utf8))
+    #expect(try BGSWire.uint(header, 11) == 0x5869be8c); #expect(try BGSWire.uint(header, 2) == 5)
+    #expect(packet.dropFirst(2 + length).isEmpty)
+}
+@Test @MainActor func friendsSnapshotMissingAuthenticatedIDDoesNotGuessOrQuery() async {
+    let transport = AccountTestTransport(authenticatedContextReplies(logonID: nil).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us, protocolVersion: .authenticatedContext)
+        Issue.record("Used transport ID when authenticated ID was missing")
+    } catch AuthenticationContextFailure.missingClientID { #expect(transport.written.count == 2); #expect(transport.cancelled) }
+    catch { Issue.record("Expected missing authenticated context classification") }
+}
+@Test @MainActor func friendsSnapshotRejectsAnotherLogicalClientsReply() async {
+    let transport = AccountTestTransport(authenticatedContextReplies(replyID: "different-logical-client").reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us, protocolVersion: .authenticatedContext)
+        Issue.record("Accepted another logical client's reply")
+    } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled) }
+    catch { Issue.record("Expected fail-closed context identity mismatch") }
+}

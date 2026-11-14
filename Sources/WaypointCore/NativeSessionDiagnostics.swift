@@ -50,3 +50,11 @@ public struct AuthenticationContextDiagnostics: Equatable, Sendable {
     /// Nil if either header has no comparable bounded length-delimited value.
     public let replyAndLogonIDsMatch: Bool?
 }
+
+
+public enum AuthenticationContextFailure: Error, LocalizedError {
+    case missingClientID
+    public var errorDescription: String? {
+        "No usable client identifier was supplied by the owner-verified logon. Friends lookup was not attempted."
+    }
+}

@@ -311,3 +311,27 @@ present. Comparison is unknown because only one auth header supplied the field.
 No values were displayed, logged or persisted. Exactly connection/authentication
 was requested, with no post-auth RPC. This reveals a distinct source to test:
 the authenticated callback header, not transport ConnectResponse.ciid.
+
+## Owner-verified logon context control (version0.0.12)
+
+Version11 found Header.client_id on the owner-verified LogonComplete callback.
+This explicit mode uses that bounded nonemptyUTF8/no-control identifier on raw
+v2 GetFriends method5, rather than transport CIID. No change to Connect/Logon,
+hash, initial body or normal defaults. A missing ID prevents any friends RPC;
+there is no fallback to the immediate auth response, CIID or invented values.
+If a correlated friends reply includes Header.client_id it must match. Replies
+without it still rely on authenticatedTLS and request-token correlation, not an
+independently present context header. Only friends requests get this identity.
+
+No session creation/query/subscription, presence update or message send is
+implemented by this mode. Lookup pagination retains existing bounds.33 targeted
+checks pass, including correct context vs transport, missing context and wrong
+reply context. Actual ID never leaves the backend or appears in a log/UI.
+
+Version0.0.12 live result: successful authentication followed by correlated
+friends status3025 using the owner-verified logon callback's Header.client_id.
+The user reported the exact status and it was verified in the version12 window.
+No friends were returned. A client-context source alone is not sufficient for
+this route. No application-session creation request was made. UI inspection
+stalled during the attempt; the user supplied the final status, and no duplicate
+lookup was initiated while awaiting it.
