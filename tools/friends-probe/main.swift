@@ -11,7 +11,7 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 480), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Read-only Experiment"
+        window.title = "Waypoint Friends — Read-only Experiment (diagnostics 2)"
         window.isReleasedWhenClosed = false; window.delegate = self
         let title = NSTextField(labelWithString: "Battle.net friends snapshot")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
@@ -61,7 +61,11 @@ import WaypointCore
                 self.output.string = friends.map(\.displayName).joined(separator: "\n")
                 self.status.stringValue = "Received \(friends.count) friends. Snapshot only; connection closed."
             } catch is CancellationError { self.status.stringValue = "Cancelled. No saved login changed." }
-            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Blizzard refused this request (status \(code)). Saved login unchanged." }
+            catch FriendSnapshotFailure.requestRejected(let code) {
+                let reason = code == 3025 ? "RPC method disabled" : "request refused"
+                self.status.stringValue = "Signed in successfully; friends lookup failed: \(reason) (\(code)). Saved login unchanged."
+            }
+            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Connection/authentication refused (status \(code)); friends lookup was not completed. Saved login unchanged." }
             catch NativeGameAccounts.Failure.owner { self.status.stringValue = "Account identity mismatch. Result discarded." }
             catch { self.status.stringValue = "Could not complete the snapshot. The service or this login may not support it. Saved login unchanged." }
         }

@@ -97,7 +97,8 @@ public final class NativeGameAccounts {
             var continuation: UInt64 = 0
             for _ in 0..<20 {
                 let request = continuation == 0 ? Data() : W.number(2, continuation)
-                let page = try FriendSnapshotPage.decode(await call(hash: 0x5869be8c, method: 5, body: request))
+                let response = try await call(hash: 0x5869be8c, method: 5, body: request, isFriendsRequest: true)
+                let page = try FriendSnapshotPage.decode(response)
                 for friend in page.friends {
                     guard seenIDs.insert(friend.id).inserted, result.count < 1000 else { throw Failure.unavailable }
                     result.append(friend)
@@ -141,7 +142,7 @@ public final class NativeGameAccounts {
         guard size <= 1_048_576 else { throw Failure.unavailable }
         return (header, try await exact(Int(size)))
     }
-    private func call(hash: UInt32, method: UInt64, body: Data = Data()) async throws -> Data {
+    private func call(hash: UInt32, method: UInt64, body: Data = Data(), isFriendsRequest: Bool = false) async throws -> Data {
         let token = sequence; sequence += 1
         try await send(service: 0, method: method, token: token, body: body, hash: hash)
         while true {
@@ -149,7 +150,10 @@ public final class NativeGameAccounts {
             if try W.uint(header, 1) == 254 {
                 guard try W.uint(header, 3) == token else { throw Failure.unavailable }
                 let status = try W.uint(header, 6, default: 0)
-                guard status == 0 else { throw Failure.rejected(status) }
+                guard status == 0 else {
+                    if isFriendsRequest { throw FriendSnapshotFailure.requestRejected(status) }
+                    throw Failure.rejected(status)
+                }
                 return response
             }
             try notification(header, response)

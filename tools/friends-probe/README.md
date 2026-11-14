@@ -56,3 +56,23 @@ unproven. A service rejection does not prove the whole feature impossible: it
 may reflect service routing, permissions, protocol version or login scope.
 No change to launcher main, PR submission, or chat transmission is authorized by
 this experiment. Account/friend details must not be included in source or docs.
+
+
+## First live result and diagnostics update
+
+The first user-run probe returned status 3025 and no list. Another Waypoint
+instance was downloading on a separate Mac; it was not asked to stop. The first
+probe did not label the failing stage, so this does not establish whether native
+authentication or the friends RPC was refused. It does not establish a concurrent
+session conflict.
+
+Public error metadata maps 3025 (`0xBD1`) to `ERROR_RPC_METHOD_DISABLED`; the
+duplicate-session code is a separate value. Reference:
+https://github.com/TrinityCore/WowPacketParser/blob/master/WowPacketParser/Enums/BattlenetRpcErrorCode.cs
+
+Diagnostics version 0.0.2 wraps only friends-RPC refusals, distinguishing them
+from connection/authentication failures without logging any extra private data.
+No new RPC, fallback, subscription or automatic retry is introduced. A synthetic
+post-authentication 3025 reply tests this distinction. A fresh live result is
+still needed to locate the actual failure stage; keep the other Mac’s download
+running during that test.

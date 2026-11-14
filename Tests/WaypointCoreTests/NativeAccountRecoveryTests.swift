@@ -157,3 +157,24 @@ private func friendPage(_ id: UInt64, tag: String, continuation: UInt64? = nil) 
     }
     #expect(try FriendSnapshotPage.decode(Data()).friends.isEmpty)
 }
+
+@Test @MainActor func friendsSnapshotDistinguishesDisabledSocialMethodFromAuthenticationFailure() async {
+    let disabled = BGSWire.number(1, 254) + BGSWire.number(3, 2) + BGSWire.number(5, 0) + BGSWire.number(6, 3025)
+    let frame = Data([UInt8(disabled.count >> 8), UInt8(disabled.count & 255)]) + disabled
+    let transport = AccountTestTransport((Array(accountReplies().prefix(3)) + [frame]).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Disabled social method returned a friends list")
+    } catch FriendSnapshotFailure.requestRejected(let code) { #expect(code == 3025); #expect(transport.cancelled) }
+    catch { Issue.record("Social rejection misreported as authentication failure") }
+}
+
+@Test @MainActor func friendsSnapshotDoesNotMislabelAnAuthenticationNotificationAsSocialRejection() async {
+    let notification = accountFrame(token: 99, body: BGSWire.number(1, 3025), service: 0, method: 1, hash: 0x9da8116b)
+    let transport = AccountTestTransport((Array(accountReplies().prefix(3)) + [notification]).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Rejected authentication notification returned friends")
+    } catch NativeGameAccounts.Failure.rejected(let code) { #expect(code == 3025); #expect(transport.cancelled) }
+    catch { Issue.record("Authentication notification was mislabeled as social rejection") }
+}

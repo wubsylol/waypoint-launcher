@@ -35,3 +35,8 @@ struct FriendSnapshotPage {
         return Self(friends: friends, continuation: continuation)
     }
 }
+
+/// Keeps a social RPC refusal distinct from connection/authentication rejection.
+public enum FriendSnapshotFailure: Error {
+    case requestRejected(UInt64)
+}
