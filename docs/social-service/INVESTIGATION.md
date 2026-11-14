@@ -187,8 +187,8 @@ game authorization and never force a new login merely because social is down.
    request body unchanged. Compare the modern v2 GetFriends request with the
    SDK client-call flag set in the method field (`0x40000005` instead of `5`).
    This is a hypothesis test of a concrete static difference, not a claimed
-   fix. Make it an explicit mode, one request, with the same deadline and no
-   fallback loop. Do not change both routing and login identity together.
+   fix. Make it an explicit mode, one bounded lookup with the same deadline and no
+   fallback loop. Successful pagination must retain explicit page/count limits. Do not change both routing and login identity together.
 2. **Connection metadata diagnostics:** record only booleans and safe status
    categories for returned bindless support/CIID and session callback presence.
    Retain any actual identifiers in memory only. Determine actual SDK identity

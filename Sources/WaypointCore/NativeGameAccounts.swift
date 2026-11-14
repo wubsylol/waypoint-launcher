@@ -109,7 +109,9 @@ public final class NativeGameAccounts {
             var continuation: UInt64 = 0
             for _ in 0..<20 {
                 let request = continuation == 0 ? Data() : W.number(2, continuation)
-                let response = try await call(hash: 0x5869be8c, method: 5, body: request, isFriendsRequest: true)
+                // Explicit control: only the method's client-call bit changes.
+                let method: UInt64 = protocolVersion == .currentClientCall ? 0x40000005 : 5
+                let response = try await call(hash: 0x5869be8c, method: method, body: request, isFriendsRequest: true)
                 let page = try FriendSnapshotPage.decode(response)
                 for friend in page.friends {
                     guard seenIDs.insert(friend.id).inserted, result.count < 1000 else { throw Failure.unavailable }

@@ -221,3 +221,25 @@ private func legacyFriend(_ low: UInt64) -> Data {
     let body = try BGSWire.decode(Data(packet.dropFirst(2 + count)))
     #expect(body.count == 1); #expect(try BGSWire.uint(body, 2) == 1)
 }
+
+@Test @MainActor func friendsSnapshotClientCallControlChangesOnlyMethodFlag() async throws {
+    let replies = Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: friendPage(42, tag: "Friend#1234"))]
+    var requests: [[Data]] = []
+    for mode in [FriendSnapshotProtocol.current, .currentClientCall] {
+        let transport = AccountTestTransport(replies.reduce(Data(), +))
+        let result = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us, protocolVersion: mode)
+        #expect(result.count == 1); #expect(transport.cancelled); #expect(transport.written.count == 3)
+        requests.append(transport.written)
+    }
+    #expect(Array(requests[0].prefix(2)) == Array(requests[1].prefix(2)))
+    var headers: [BGSWire.Message] = []
+    for packet in requests.map({ $0[2] }) {
+        let prefix = [UInt8](packet.prefix(2)), length = Int(prefix[0]) * 256 + Int(prefix[1])
+        headers.append(try BGSWire.decode(Data(packet.dropFirst(2).prefix(length))))
+        #expect(packet.dropFirst(2 + length).isEmpty)
+    }
+    #expect(try BGSWire.uint(headers[0], 2) == 5)
+    #expect(try BGSWire.uint(headers[1], 2) == 0x40000005)
+    headers[0].removeValue(forKey: 2); headers[1].removeValue(forKey: 2)
+    #expect(headers[0] == headers[1])
+}

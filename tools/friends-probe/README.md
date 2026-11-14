@@ -159,3 +159,26 @@ plan. `offline/inspect_protocol.py` and its tests have no network/authentication
 code and do not require a sign-in. No additional live test was run for that
 report. In particular, the client-call flag, identity headers and application
 session are still unverified hypotheses, not implemented fixes.
+
+
+## Explicit client-call control (version 0.0.5)
+
+The user returned and confirmed WoW was closed. This mode selects modern v2
+GetFriends with method `0x40000005`, keeping endpoint, title, saved token, hash,
+and initial body unchanged from the original v2 control. It does not create an
+application session or subscribe. A parity test compares actual mock-transport
+packets: connection/authentication packets match byte-for-byte; the decoded
+social header differs only in method field 2 and the initial bodies are empty.
+
+One bounded lookup is attempted. If a successful response includes continuation,
+the existing up-to-20-page/1000-entry bounds still apply; this is not a promise
+of exactly one RPC after success. Refusal stops immediately, with no fallback.
+The UI displays returned BattleTags or numbered placeholders, not raw friend
+IDs. 20 targeted native/probe checks pass. Live outcome is recorded separately.
+
+Live v0.0.5 result: the window and the user both confirmed successful owner-
+verified authentication followed by a correlated status3011 (INVALID_METHOD)
+for GetFriends with method0x40000005. This differs from the raw method5 refusal
+3025. The flag variant is not a fix and should not replace raw methods. No
+session was created and no friend list returned. Download processes were left
+alone. Stop using flagged methods unless further wire evidence supports them.
