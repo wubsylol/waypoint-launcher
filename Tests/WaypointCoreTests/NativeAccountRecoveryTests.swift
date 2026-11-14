@@ -206,3 +206,18 @@ private func legacyFriend(_ low: UInt64) -> Data {
         #expect(throws: (any Error).self) { try LegacyFriendSnapshot.decode(data) }
     }
 }
+
+@Test @MainActor func friendsSnapshotSubscriptionReadsFieldFiveThenCloses() async throws {
+    let entry = try BGSWire.data(BGSWire.decode(legacyFriend(42)), 1)
+    let page = BGSWire.number(1, 200) + BGSWire.bytes(5, entry)
+    let transport = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: page)]).reduce(Data(), +))
+    let result = try await NativeGameAccounts(transport: transport).friends(token: accountTestToken, build: 70938, region: .us, protocolVersion: .legacySubscription)
+    #expect(result.count == 1); #expect(transport.cancelled); #expect(transport.written.count == 3)
+    let packet = try #require(transport.written.last), prefix = [UInt8](packet.prefix(2))
+    let count = Int(prefix[0]) * 256 + Int(prefix[1])
+    let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(count)))
+    #expect(try BGSWire.uint(header, 11) == 0xa3ddb1bd)
+    #expect(try BGSWire.uint(header, 2) == 1)
+    let body = try BGSWire.decode(Data(packet.dropFirst(2 + count)))
+    #expect(body.count == 1); #expect(try BGSWire.uint(body, 2) == 1)
+}

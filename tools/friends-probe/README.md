@@ -1,7 +1,7 @@
 # Read-only Battle.net friends experiment
 
 Branch: `experiment/battlenet-friends`. Do not merge or push this experiment to
-`main`. This is a bounded snapshot probe, not a supported social/chat client.
+`main`. This is a bounded social-read probe, not a supported social/chat client.
 
 Build with `tools/friends-probe/build.sh`, then open the printed app path. The
 probe makes no connection until **Read friends** is clicked. Close every WoW
@@ -18,10 +18,11 @@ Keychain access may prompt for approval. No new sign-in is requested by this too
 
 The core can explicitly select either read-only friends v2 `GetFriends` method
 5 (original hash `0x5869BE8C`; name hash `0x9D059A2F`) or legacy friends v1
-`GetFriendList` method 13 (original hash `0xA3DDB1BD`). Probe version 0.0.3
-explicitly selects the legacy route. There is no automatic fallback or retry.
+`GetFriendList` method 13 (original hash `0xA3DDB1BD`). Probe version 0.0.3 explicitly selected the legacy route. Version 0.0.4
+selects legacy Subscribe method 1 for its initial response, then disconnects. There is no automatic fallback or retry.
 Continuation pages are bounded to 20, total friends to 1000, with the existing
-35-second native deadline and frame bounds. It does not subscribe, set presence,
+35-second native deadline and frame bounds. Except for the explicit connection-scoped initial-subscription mode described below,
+it does not subscribe. It does not set presence,
 send/receive chat, add/remove friends or accept invitations. Merely opening an
 authentication session is not a proof of no server-side session/presence effects.
 
@@ -106,3 +107,27 @@ results alone do not prove correct enumeration against the expected account.
 18 targeted synthetic/native regression checks pass, including fixed64 legacy
 entity parsing and exact read-only dispatch. Legacy live access is still
 unproven. Keep the other Mac’s download running; close WoW before any new test.
+
+
+## Initial-subscription experiment (version 0.0.4)
+
+The user confirmed that the legacy v1 GetFriendList method also returned 3025
+after successful authentication. Neither direct snapshot call is usable for
+the tested session. No download on the user’s other Mac was stopped.
+
+The next explicit mode calls legacy v1 Subscribe (hash `0xA3DDB1BD`, method 1),
+with required object_id field 2 set to connection-local listener object 1;
+optional agent_id is omitted. Public SubscribeResponse schema places friends
+in field 5, not field 1 (deprecated max_friends). The same bounded entity-only
+parser is used and ignores invitation and other fields. The existing native
+session defer closes the connection immediately after parsing the initial
+response, or on rejection, cancellation, deadline or disconnect.
+
+This mode creates temporary subscription state on that connection. It does not
+set presence, modify friendships, send messages or keep a background social
+session. Listener-object handling and server acceptance are hypotheses for the
+bounded live test, not established facts. Unexpected callbacks still fail closed.
+
+A synthetic response containing both max_friends field 1 and friends field 5
+checks the correct field and exact Subscribe dispatch, followed by connection
+closure. No automatic fallback to this mode occurs. The UI labels it explicitly.

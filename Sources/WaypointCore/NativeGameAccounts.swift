@@ -89,10 +89,18 @@ public final class NativeGameAccounts {
         }
     }
 
-    /// Experimental read-only snapshot using the selected protocol. Does not subscribe, set presence,
-    /// mutate friendships, send messages, or persist any returned friend data.
+    /// Experimental friends read using the selected protocol. The explicit
+    /// subscription mode closes after its initial snapshot. Does not set presence,
+    /// mutate friendships, send messages, or persist returned friend data.
     public func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol = .current) async throws -> [BattleNetFriend] {
         try await authenticated(token: token, build: build, region: region) {
+            if protocolVersion == .legacySubscription {
+                // Connection-scoped listener object 1. The initial subscription
+                // response contains the list in field 5; close immediately after
+                // parsing it. Never keep a social subscription in the launcher.
+                let response = try await call(hash: 0xa3ddb1bd, method: 1, body: W.number(2, 1), isFriendsRequest: true)
+                return try LegacyFriendSnapshot.decode(response, friendsField: 5)
+            }
             if protocolVersion == .legacy {
                 let response = try await call(hash: 0xa3ddb1bd, method: 13, isFriendsRequest: true)
                 return try LegacyFriendSnapshot.decode(response)

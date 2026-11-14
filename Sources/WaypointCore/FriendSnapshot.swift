@@ -43,15 +43,15 @@ public enum FriendSnapshotFailure: Error {
 
 
 public enum FriendSnapshotProtocol: Sendable {
-    case current, legacy
+    case current, legacy, legacySubscription
 }
 
 /// Legacy schema has entity references and attributes, not a dedicated BattleTag.
 /// Do not interpret arbitrary attributes as names or expose Real ID information.
 struct LegacyFriendSnapshot {
-    static func decode(_ data: Data) throws -> [BattleNetFriend] {
+    static func decode(_ data: Data, friendsField: Int = 1) throws -> [BattleNetFriend] {
         typealias W = BGSWire
-        let values = try W.decode(data)[1] ?? []
+        let values = try W.decode(data)[friendsField] ?? []
         guard values.count <= 1000 else { throw W.Failure.oversized }
         var result: [BattleNetFriend] = [], seen = Set<String>()
         for value in values {
