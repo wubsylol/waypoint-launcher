@@ -4,6 +4,7 @@ import WaypointCore
 /// Optional Safari handoff. No credentials are read from browser storage or clipboard.
 @MainActor
 final class BrowserReturnSheet: NSObject, NSWindowDelegate {
+    private(set) var verifiedProfile: NativeAccountProfile?
     private var window: NSWindow?
     private weak var parent: NSWindow?
     private var continuation: CheckedContinuation<LoginToken?, Never>?
@@ -16,7 +17,7 @@ final class BrowserReturnSheet: NSObject, NSWindowDelegate {
     private var task: Task<Void, Never>?
 
     func run(on parent: NSWindow, url: URL) async -> LoginToken? {
-        self.parent = parent; self.url = url
+        self.parent = parent; self.url = url; verifiedProfile = nil
         return await withCheckedContinuation { continuation in
             self.continuation = continuation
             let panel = NSPanel(contentRect: NSRect(x:0,y:0,width:520,height:430), styleMask:[.titled,.closable],backing:.buffered,defer:false)
@@ -82,8 +83,10 @@ final class BrowserReturnSheet: NSObject, NSWindowDelegate {
                 guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath:$0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
                     self.status.stringValue="Close World of Warcraft before verifying this sign-in.";return
                 }
-                _=try await NativeGameAccounts().discover(token:token,build:UInt64(version.buildID),region:.us)
+                let native = NativeGameAccounts()
+                _ = try await native.discover(token: token, build: UInt64(version.buildID), region: .us)
                 guard !Task.isCancelled, self.continuation != nil else { return }
+                self.verifiedProfile = native.authenticatedProfile
                 self.finish(token)
             } catch {
                 guard !Task.isCancelled, self.continuation != nil else { return }
@@ -94,6 +97,7 @@ final class BrowserReturnSheet: NSObject, NSWindowDelegate {
     @objc func cancel() { finish(nil) }
     private func finish(_ token: LoginToken?) {
         guard let continuation else { return };self.continuation=nil
+        if token == nil { verifiedProfile = nil }
         task?.cancel();field.stringValue=""
         if let window { window.delegate=nil;parent?.endSheet(window);window.orderOut(nil) }
         window=nil;url=nil

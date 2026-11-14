@@ -93,6 +93,15 @@ public struct AccountList: Codable, Equatable, Sendable {
         if let email, !email.isEmpty { accounts[i].email = email }
     }
 
+    /// Applies only the owner-bound metadata returned by native authentication.
+    /// Existing names survive missing/invalid metadata; no identity is added here.
+    @discardableResult
+    public mutating func setNativeProfile(_ profile: NativeAccountProfile, for owner: String) -> Bool {
+        guard profile.accountID == owner, self[owner] != nil, let tag = profile.battleTag else { return false }
+        setProfile(owner, battleTag: tag, email: nil)
+        return true
+    }
+
     /// Forgets an account; the next one, if any, becomes active. Returns the
     /// removed account, whose session the caller should delete.
     @discardableResult

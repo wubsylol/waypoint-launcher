@@ -103,3 +103,62 @@ private let accountTestToken = LoginToken("US-0123456789abcdef0123456789abcdef-1
     } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled) }
     catch { Issue.record("Account-info owner mismatch was not recognized") }
 }
+
+
+private func nativeProfileReplies(tag: String? = "Example#1234", owner: UInt64 = 123) -> [Data] {
+    var record = BGSWire.number(1, owner)
+    if let tag { record += BGSWire.text(3, tag) }
+    // The optional game-account field is repeated and is not read as a scalar.
+    record += BGSWire.bytes(2, BGSWire.number(1, 456)) + BGSWire.bytes(2, BGSWire.number(1, 457))
+    return [accountFrame(token: 0), accountFrame(token: 1),
+        accountFrame(token: 99, body: BGSWire.bytes(2, record), service: 0, method: 1, hash: 0x9da8116b)]
+}
+@Test @MainActor func nativeProfileReturnsOwnerVerifiedBattleTagWithoutExtraRPCs() async throws {
+    let transport = AccountTestTransport(nativeProfileReplies().reduce(Data(), +))
+    let client = NativeGameAccounts(transport: transport)
+    let profile = try await client.fetchProfile(token: accountTestToken, build: 70938, region: .us)
+    #expect(profile.accountID == "123"); #expect(profile.battleTag == "Example#1234")
+    #expect(client.authenticatedProfile == profile); #expect(transport.sends == 2); #expect(transport.cancelled)
+}
+@Test @MainActor func nativeProfileRejectsWrongOwnerBeforeReturningMetadata() async {
+    let transport = AccountTestTransport(nativeProfileReplies(owner: 999).reduce(Data(), +))
+    let client = NativeGameAccounts(transport: transport)
+    do {
+        _ = try await client.fetchProfile(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Wrong-owner BattleTag was accepted")
+    } catch NativeGameAccounts.Failure.owner { #expect(client.authenticatedProfile == nil); #expect(transport.cancelled) }
+    catch { Issue.record("Expected account identity mismatch") }
+}
+@Test @MainActor func nativeProfileMissingBattleTagDoesNotRejectValidLogin() async throws {
+    let transport = AccountTestTransport(nativeProfileReplies(tag: nil).reduce(Data(), +))
+    let profile = try await NativeGameAccounts(transport: transport).fetchProfile(token: accountTestToken, build: 70938, region: .us)
+    #expect(profile.accountID == "123"); #expect(profile.battleTag == nil); #expect(transport.cancelled)
+}
+@Test @MainActor func nativeDiscoveryAlsoCapturesVerifiedProfile() async throws {
+    let replies = nativeProfileReplies() + Array(accountReplies().dropFirst(3))
+    let transport = AccountTestTransport(replies.reduce(Data(), +)), client = NativeGameAccounts(transport: transport)
+    let licences = try await client.discover(token: accountTestToken, build: 70938, region: .us)
+    #expect(licences.count == 1); #expect(client.authenticatedProfile?.battleTag == "Example#1234")
+    #expect(transport.sends == 4); #expect(transport.cancelled)
+}
+@Test func nativeProfileFiltersOptionalMetadataWithoutTrustingArbitraryStrings() {
+    for tag in ["", "Example", "#1234", "Example#", "Example#abcd", "Example#12#34", "Example\n#1234", String(repeating: "x", count: 257)] {
+        let record = try! BGSWire.decode(BGSWire.text(3, tag))
+        #expect(NativeAccountProfile(accountID: "123", record: record).battleTag == nil)
+    }
+    #expect(NativeAccountProfile(accountID: "123", record: [3: [.number(123)]]).battleTag == nil)
+    #expect(NativeAccountProfile(accountID: "123", record: [3: [.bytes(Data([255]))]]).battleTag == nil)
+    let valid = NativeAccountProfile(accountID: "123", record: [3: [.bytes(Data("Ünicode#1234".utf8))]])
+    #expect(valid.battleTag == "Ünicode#1234")
+}
+@Test func nativeProfileApplicationIsOwnerScopedAndKeepsEmailAndKnownNames() throws {
+    var list = AccountList(); list.signedIn("123", session: .shared); list.signedIn("456", session: .fresh())
+    list.setProfile("123", battleTag: nil, email: "private@example.invalid")
+    let profile = NativeAccountProfile(accountID: "123", record: try BGSWire.decode(BGSWire.text(3, "Example#1234")))
+    let wrongOwner = list.setNativeProfile(profile, for: "456"); #expect(!wrongOwner); #expect(list["456"]?.battleTag == nil)
+    let applied = list.setNativeProfile(profile, for: "123"); #expect(applied); #expect(list["123"]?.displayName == "Example#1234")
+    #expect(list["123"]?.email == "private@example.invalid")
+    let missing = list.setNativeProfile(NativeAccountProfile(accountID: "123", record: [:]), for: "123"); #expect(!missing)
+    #expect(list["123"]?.battleTag == "Example#1234")
+    _ = list.remove("123"); let removed = list.setNativeProfile(profile, for: "123"); #expect(!removed)
+}

@@ -17,6 +17,7 @@ public final class NativeGameAccounts {
             }
         }
     }
+    public private(set) var authenticatedProfile: NativeAccountProfile?
     private typealias W = BGSWire
     private let transport: any NativeAccountTransport
     private let timeout: Duration
@@ -32,7 +33,7 @@ public final class NativeGameAccounts {
         self.transport = transport; self.timeout = timeout
     }
     public func cancel() { closed = true; transport.cancel() }
-    public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
+    private func withAuthenticatedSession<T>(token: LoginToken, build: UInt64, region: Region, operation: () async throws -> T) async throws -> T {
         guard region == .us else { throw Failure.unsupported }
         guard let owner = UInt64(token.accountID), owner > 0, build > 0 else { throw Failure.owner }
         expectedOwner = owner
@@ -55,6 +56,21 @@ public final class NativeGameAccounts {
                 let (header, body) = try await receive()
                 try notification(header, body)
             }
+            return try await operation()
+        } onCancel: { [weak self] in Task { @MainActor in self?.cancel() } }
+    }
+
+    /// Retrieves only the verified identity; no licence/social/session RPCs.
+    public func fetchProfile(token: LoginToken, build: UInt64, region: Region) async throws -> NativeAccountProfile {
+        try await withAuthenticatedSession(token: token, build: build, region: region) {
+            guard let profile = authenticatedProfile else { throw Failure.unavailable }
+            return profile
+        }
+    }
+
+    public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
+        try await withAuthenticatedSession(token: token, build: build, region: region) {
+            let owner = expectedOwner
             let body = try await call(hash: 0x22dc2464, method: 108)
             let links = try W.decode(W.data(W.decode(body), 1))[1] ?? []
             guard links.count <= 100 else { throw Failure.unavailable }
@@ -79,7 +95,7 @@ public final class NativeGameAccounts {
                 accounts.append(GameAccount(titleID: "5730135", accountID: String(id), name: name, region: region.rawValue))
             }
             return accounts.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        } onCancel: { [weak self] in Task { @MainActor in self?.cancel() } }
+        }
     }
     private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil) async throws {
         try Task.checkCancellation()
@@ -134,6 +150,7 @@ public final class NativeGameAccounts {
             guard status == 0 else { throw Failure.rejected(status) }
             let record = try W.decode(W.data(message, 2))
             guard try W.uint(record, 1) == expectedOwner else { throw Failure.owner }
+            authenticatedProfile = NativeAccountProfile(accountID: String(expectedOwner), record: record)
             loggedIn = true
         case 2:
             let state = try W.decode(W.data(W.decode(body), 1))

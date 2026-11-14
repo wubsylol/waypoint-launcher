@@ -145,6 +145,7 @@ final class AppModel {
         didSet { gameAccountChoices.save() }
     }
     private var isSelectingGameAccount = false
+    private var isRefreshingNativeProfile = false
     private var profileFetches: Set<String> = []
 
     private let library = GameLibrary()
@@ -847,7 +848,7 @@ final class AppModel {
     /// Only one sign-in at a time: the login window and the hidden web view
     /// each serve a single request.
     var isSigningIn: Bool {
-        isAddingAccount || isManagingSavedLogin || isSelectingGameAccount || phases.values.contains {
+        isAddingAccount || isManagingSavedLogin || isSelectingGameAccount || isRefreshingNativeProfile || phases.values.contains {
             switch $0 { case .signingIn, .preparingWindows, .launching: true; default: false }
         }
     }
@@ -982,7 +983,10 @@ final class AppModel {
             guard let appURL = game.appURL, let bundle = Bundle(url: appURL),
                   let version = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
                   let build = UInt64(version.split(separator: ".").last ?? "") else { throw NativeGameAccounts.Failure.unavailable }
-            return try await NativeGameAccounts().discover(token: token, build: build, region: region)
+            let native = NativeGameAccounts()
+            let licences = try await native.discover(token: token, build: build, region: region)
+            if let profile = native.authenticatedProfile { self.accountList.setNativeProfile(profile, for: account.id) }
+            return licences
         }) else { return nil }
         // The caller's account/region snapshot owns this choice, not a newly selected identity.
         gameAccountChoices.select(choice,owner:account.id,uid:game.id,region:region.rawValue)
@@ -1073,7 +1077,7 @@ final class AppModel {
             return
         }
         Log.info(.auth, "token", nil, ["source": "login_window", "codename": target.codename])
-        let saved = await adopt(token, codename: target.codename, session: session, typedName: loginWindow.typedAccountName)
+        let saved = await adopt(token, codename: target.codename, session: session, typedName: loginWindow.typedAccountName, verifiedProfile: loginWindow.verifiedProfile)
         if let replacing, token.accountID == replacing {
             if saved {
                 do {
@@ -1158,10 +1162,11 @@ final class AppModel {
     /// Returns whether the token made it into the keychain.
     @discardableResult
     private func adopt(_ token: LoginToken, codename: String, session: WebSessionID, typedName: String? = nil,
-                       activate: Bool = true) async -> Bool {
+                       activate: Bool = true, verifiedProfile: NativeAccountProfile? = nil) async -> Bool {
         let id = token.accountID
         let isNew = accountList[id] == nil
         let unused = accountList.signedIn(id, session: session, activate: activate)
+        if let verifiedProfile { accountList.setNativeProfile(verifiedProfile, for: id) }
         if let typedName, accountList[id]?.email == nil { accountList.setProfile(id, battleTag: nil, email: typedName) }
         var saved = true
         do {
@@ -1176,6 +1181,46 @@ final class AppModel {
         return saved
     }
 
+    /// Explicit repair for accounts saved before native profile capture existed.
+    /// Uses the saved token, without requesting another sign-in for a name.
+    func refreshBattleTag() async {
+        guard !isSigningIn, let account = activeAccount else { return }
+        guard !RunningProcesses.executables().contains(where: {
+            URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft")
+        }) else {
+            let alert = NSAlert(); alert.messageText = "Close World of Warcraft first"
+            alert.informativeText = "Close WoW on all your devices before refreshing the BattleTag. Your saved login will be kept."
+            alert.runModal(); return
+        }
+        isRefreshingNativeProfile = true
+        defer { isRefreshingNativeProfile = false }
+        guard let token = tokenVault.token(account: account.id, codename: "WoW"), token.accountID == account.id else {
+            let alert = NSAlert(); alert.messageText = "No saved WoW login is available"
+            alert.informativeText = "Waypoint can capture the BattleTag during Safari WoW sign-in or WoW account selection (Americas)."
+            alert.runModal(); return
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false; config.timeoutIntervalForRequest = 10; config.timeoutIntervalForResource = 20
+        let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+        do {
+            let version = try await VersionService(session: session).latest(product: "wowf", region: .us)
+            guard version.region == "us", version.buildID > 0, !Task.isCancelled,
+                  accountList[account.id] != nil,
+                  !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+                throw NativeGameAccounts.Failure.gameRunning
+            }
+            let profile = try await NativeGameAccounts().fetchProfile(token: token, build: UInt64(version.buildID), region: .us)
+            guard !Task.isCancelled, accountList.setNativeProfile(profile, for: account.id) else {
+                throw NativeGameAccounts.Failure.unavailable
+            }
+        } catch {
+            if Task.isCancelled { return }
+            let alert = NSAlert(); alert.messageText = "Couldn’t retrieve the BattleTag"
+            alert.informativeText = "Your saved login and account selections were kept. Try again with WoW closed."
+            alert.runModal()
+        }
+    }
+
     /// Looks up the account's BattleTag and email on Blizzard's account page.
     private func refreshProfile(_ id: String) async {
         guard let account = accountList[id], profileFetches.insert(id).inserted else { return }
@@ -1186,7 +1231,8 @@ final class AppModel {
                 Log.warning(.auth, "profile_other_account")
                 return
             }
-            accountList.setProfile(id, battleTag: profile.battleTag, email: profile.email)
+            // A delayed website lookup must not overwrite a newly verified native name.
+            accountList.setProfile(id, battleTag: accountList[id]?.battleTag == nil ? profile.battleTag : nil, email: profile.email)
             Log.info(.auth, "profile", nil, ["battletag": profile.battleTag != nil, "email": profile.email != nil])
         case .signedOut:
             Log.info(.auth, "profile_signed_out")
@@ -1263,7 +1309,7 @@ final class AppModel {
                 // Manual sign-in may have used another password: only an
                 // explicit Update Saved Login re-enables these credentials.
                 await adopt(token, codename: plan.codename, session: session, typedName: loginWindow.typedAccountName,
-                            activate: activate)
+                            activate: activate, verifiedProfile: loginWindow.verifiedProfile)
                 return token
             case .failed:
                 state.failedTemporarily()
@@ -1300,7 +1346,7 @@ final class AppModel {
         }
         Log.info(.auth, "token", nil, ["source": "login_window", "codename": plan.codename])
         await adopt(token, codename: plan.codename, session: session, typedName: loginWindow.typedAccountName,
-                    activate: activate)
+                    activate: activate, verifiedProfile: loginWindow.verifiedProfile)
         return token
     }
 

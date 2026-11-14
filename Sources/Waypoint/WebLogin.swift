@@ -222,6 +222,7 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
     private var prefillTask: Task<Void, Never>?
     private var loadWatchdog: Task<Void, Never>?
     private var browserSheet: BrowserReturnSheet?
+    private(set) var verifiedProfile: NativeAccountProfile?
 
     /// WebKit lets only browsers and the site's own apps use passkeys, so
     /// Blizzard's passkey sign-in can't finish in this window.
@@ -279,7 +280,8 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
     /// page shows once it's at the password.
     func run(_ url: URL, title: String, session: WebSessionID, accountName: String? = nil,
              preparedWebView: WKWebView? = nil, notice: String? = nil) async -> LoginToken? {
-        await withCheckedContinuation { continuation in
+        verifiedProfile = nil
+        return await withCheckedContinuation { continuation in
             self.continuation = continuation
             let catcher = TokenCatcher()
             self.catcher = catcher
@@ -433,7 +435,11 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
             let token=await sheet.run(on:window,url:url)
             guard self.continuation != nil, self.browserSheet === sheet else { return }
             self.browserSheet=nil
-            if let token { self.typedAccountName=nil;self.finish(token) }
+            if let token {
+                self.verifiedProfile = sheet.verifiedProfile
+                self.typedAccountName = nil
+                self.finish(token)
+            }
             else {
                 self.connectionStatus.stringValue="Continue here or Retry"
                 self.retryButton.isHidden=false
@@ -551,6 +557,7 @@ final class LoginWindow: NSObject, NSWindowDelegate, WKScriptMessageHandler {
     private func finish(_ token: LoginToken?) {
         guard let continuation else { return }
         self.continuation = nil
+        if token == nil { verifiedProfile = nil }
         browserSheet?.cancel();browserSheet=nil
         prefillTask?.cancel(); prefillTask = nil
         loadWatchdog?.cancel(); loadWatchdog = nil
