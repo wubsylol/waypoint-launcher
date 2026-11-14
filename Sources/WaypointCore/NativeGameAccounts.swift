@@ -20,6 +20,11 @@ public final class NativeGameAccounts {
     private enum ReplyKind { case native, friends, sessionDiagnostic }
     private typealias W = BGSWire
     private var recordsDiagnostics = false
+    private var inspectsAuthenticationContext = false
+    private var authenticationReplyHasClientID = false
+    private var logonNotificationHasClientID = false
+    private var authenticationReplyClientID: Data?
+    private var logonNotificationClientID: Data?
     private var includesConnectionIdentity = false
     private var connectionIdentity: String?
     private var diagnosticStage = SessionDiagnosticStage.connection
@@ -187,6 +192,27 @@ public final class NativeGameAccounts {
         catch Failure.unavailable { throw SessionDiagnosticFailure.unavailable(diagnosticStage) }
     }
 
+    /// Connect/authenticate only, then close. No friends, session-query or
+    /// session-creation RPC is sent. Actual header IDs stay inside this instance.
+    public func authenticationContextDiagnostics(token: LoginToken, build: UInt64, region: Region) async throws -> AuthenticationContextDiagnostics {
+        recordsDiagnostics = true
+        inspectsAuthenticationContext = true
+        return try await authenticated(token: token, build: build, region: region) {
+            let match: Bool?
+            if let reply = authenticationReplyClientID, let logon = logonNotificationClientID { match = reply == logon }
+            else { match = nil }
+            return AuthenticationContextDiagnostics(connectionIdentityPresent: diagnostics.connectionIdentityPresent,
+                authenticationReplyClientIDPresent: authenticationReplyHasClientID,
+                logonNotificationClientIDPresent: logonNotificationHasClientID, replyAndLogonIDsMatch: match)
+        }
+    }
+
+    private func boundedHeaderClientID(_ header: W.Message) -> Data? {
+        guard let values = header[13], values.count == 1, case .bytes(let data) = values[0],
+              !data.isEmpty, data.count <= 512 else { return nil }
+        return data
+    }
+
     private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil, clientID: String? = nil) async throws {
         try Task.checkCancellation()
         guard !closed, body.count <= 1_048_576 else { throw Failure.unavailable }
@@ -239,6 +265,10 @@ public final class NativeGameAccounts {
                     case .native: throw Failure.rejected(status)
                     }
                 }
+                if inspectsAuthenticationContext, hash == 0xc02f8216, method == 1 {
+                    authenticationReplyHasClientID = header[13] != nil
+                    authenticationReplyClientID = boundedHeaderClientID(header)
+                }
                 return response
             }
             try notification(header, response)
@@ -268,6 +298,10 @@ public final class NativeGameAccounts {
                     }).sorted().joined(separator: "/")
                     return "field \(field): \(categories)"
                 }
+            }
+            if inspectsAuthenticationContext {
+                logonNotificationHasClientID = header[13] != nil
+                logonNotificationClientID = boundedHeaderClientID(header)
             }
             loggedIn = true
         case 2:

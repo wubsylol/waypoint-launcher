@@ -289,3 +289,25 @@ step into an unattended CreateSession request. No explicit Create/Restore/
 DestroySession request, messaging or friendship mutation was tested in this
 round. The user-approved system Keychain prompt was not visually inspected;
 the probe itself has no password-entry form and only reads the existing item.
+
+## Authentication logical-client inspection (version0.0.11)
+
+SDK descriptors mark authentication, friends and session services use_client_id.
+The transport CIID is not established as the logical authentication client ID.
+Before any CreateSession experiment, this mode inspects whether successful
+correlated authentication replies and owner-verified logon notifications carry
+Header.client_id13. It reports only presence and optional equality of two
+bounded nonempty length-delimited values. Neither actual ID leaves the backend.
+No request is sent after authentication; no header is added to Connect/Logon.
+No friends/subscription/session query or creation/restoration/mutation occurs.
+
+30 targeted checks pass: cases cover absent/equal/different IDs, owner refusal
+and exact two-request Connect/Logon lifetime. The user confirmed all WoW clients
+closed on both Macs before the live test. Other downloads remain untouched.
+
+Version0.0.11 live result: connection identity field present, immediate auth
+reply Header.client_id absent, owner-verified logon notification Header.client_id
+present. Comparison is unknown because only one auth header supplied the field.
+No values were displayed, logged or persisted. Exactly connection/authentication
+was requested, with no post-auth RPC. This reveals a distinct source to test:
+the authenticated callback header, not transport ConnectResponse.ciid.

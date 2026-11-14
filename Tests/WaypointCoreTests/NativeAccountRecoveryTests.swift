@@ -31,10 +31,11 @@ private final class AccountTestTransport: NativeAccountTransport {
     }
     func cancel() { cancelled = true; pending?.resume(throwing: CancellationError()); pending = nil }
 }
-private func accountFrame(token: UInt64, body: Data = Data(), service: UInt64 = 254, method: UInt64? = nil, hash: UInt32? = nil) -> Data {
+private func accountFrame(token: UInt64, body: Data = Data(), service: UInt64 = 254, method: UInt64? = nil, hash: UInt32? = nil, clientID: String? = nil) -> Data {
     var h = BGSWire.number(1, service) + BGSWire.number(3, token) + BGSWire.number(5, UInt64(body.count))
     if let method { h += BGSWire.number(2, method) }
     if let hash { h += BGSWire.fixed32(11, hash) }
+    if let clientID { h += BGSWire.text(13, clientID) }
     return Data([UInt8(h.count >> 8), UInt8(h.count & 255)]) + h + body
 }
 private func accountReplies(owner: UInt64 = 123) -> [Data] {
@@ -357,4 +358,27 @@ private func diagnosticReplies(queryBody: Data, owner: UInt64 = 123) -> [Data] {
     #expect(headers[0][13] == nil)
     #expect(try BGSWire.data(headers[1], 13) == Data("synthetic-connection-id".utf8))
     headers[1].removeValue(forKey: 13); #expect(headers[0] == headers[1])
+}
+
+@Test @MainActor func authenticationContextDiagnosticsOnlyConnectsAndAuthenticates() async throws {
+    for ids in [(nil, nil), ("synthetic-id", "synthetic-id"), ("reply-id", "logon-id")] as [(String?, String?)] {
+        let replies = [accountFrame(token: 0, body: BGSWire.text(9, "synthetic-transport-id")),
+            accountFrame(token: 1, clientID: ids.0),
+            accountFrame(token: 99, body: BGSWire.bytes(2, BGSWire.number(1, 123)), service: 0, method: 1, hash: 0x9da8116b, clientID: ids.1)]
+        let transport = AccountTestTransport(replies.reduce(Data(), +))
+        let report = try await NativeGameAccounts(transport: transport).authenticationContextDiagnostics(token: accountTestToken, build: 70938, region: .us)
+        #expect(report.connectionIdentityPresent)
+        #expect(report.authenticationReplyClientIDPresent == (ids.0 != nil))
+        #expect(report.logonNotificationClientIDPresent == (ids.1 != nil))
+        #expect(report.replyAndLogonIDsMatch == (ids.0 == nil || ids.1 == nil ? nil : ids.0 == ids.1))
+        #expect(transport.written.count == 2); #expect(transport.cancelled)
+    }
+}
+@Test @MainActor func authenticationContextDiagnosticsRejectsWrongOwner() async {
+    let transport = AccountTestTransport(Array(accountReplies(owner: 999).prefix(3)).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).authenticationContextDiagnostics(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Returned context for wrong account")
+    } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled); #expect(transport.written.count == 2) }
+    catch { Issue.record("Expected owner validation before context report") }
 }

@@ -41,3 +41,12 @@ public enum SessionDiagnosticFailure: Error, LocalizedError {
         }
     }
 }
+
+/// Only header-presence/equality facts; no actual client identifiers escape.
+public struct AuthenticationContextDiagnostics: Equatable, Sendable {
+    public let connectionIdentityPresent: Bool
+    public let authenticationReplyClientIDPresent: Bool
+    public let logonNotificationClientIDPresent: Bool
+    /// Nil if either header has no comparable bounded length-delimited value.
+    public let replyAndLogonIDsMatch: Bool?
+}
