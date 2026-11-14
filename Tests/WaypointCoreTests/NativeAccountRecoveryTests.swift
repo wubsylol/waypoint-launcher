@@ -255,7 +255,7 @@ private func diagnosticReplies(queryBody: Data, owner: UInt64 = 123) -> [Data] {
     let transport = AccountTestTransport(diagnosticReplies(queryBody: state).reduce(Data(), +))
     let report = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us)
     #expect(report.bindlessAccepted == true); #expect(report.connectionIdentityPresent)
-    #expect(report.logonBattleTagPresent); #expect(report.logonSessionKeyPresent); #expect(!report.logonGameAccountPresent)
+    #expect(report.logonRecordHasField3); #expect(report.logonRecordHasField5); #expect(!report.logonRecordHasField2)
     #expect(report.sessionQueryStatus == 0); #expect(report.serverSessionIDPresent == true)
     #expect(transport.cancelled); #expect(transport.written.count == 3)
     let packet = try #require(transport.written.last), prefix = [UInt8](packet.prefix(2))
@@ -280,4 +280,27 @@ private func diagnosticReplies(queryBody: Data, owner: UInt64 = 123) -> [Data] {
         Issue.record("Accepted another owner's session metadata")
     } catch NativeGameAccounts.Failure.owner { #expect(transport.cancelled) }
     catch { Issue.record("Expected session owner mismatch") }
+}
+
+@Test @MainActor func sessionDiagnosticsObservesVariantMetadataWithoutRejectingAuthentication() async throws {
+    var replies = diagnosticReplies(queryBody: Data())
+    replies[0] = accountFrame(token: 0, body: BGSWire.number(7, 99) + BGSWire.number(9, 123))
+    replies[2] = accountFrame(token: 99, body: BGSWire.bytes(2, BGSWire.number(1, 123) + BGSWire.number(3, 99) + BGSWire.number(5, 55)), service: 0, method: 1, hash: 0x9da8116b)
+    let transport = AccountTestTransport(replies.reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us)
+    #expect(report.bindlessAccepted == nil); #expect(report.connectionIdentityPresent)
+    #expect(report.logonRecordHasField3); #expect(report.logonRecordHasField5)
+    #expect(report.logonRecordShape == ["field 1: numeric", "field 3: numeric", "field 5: numeric"])
+    #expect(!report.logonRecordShape.joined().contains("123")); #expect(transport.cancelled)
+}
+@Test @MainActor func sessionDiagnosticsLabelsUnsupportedCallbackAtQueryStage() async {
+    var replies = diagnosticReplies(queryBody: Data())
+    replies[3] = accountFrame(token: 99, body: Data(), service: 0, method: 7, hash: 0x12345678)
+    let transport = AccountTestTransport(replies.reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).sessionDiagnostics(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Unsupported callback accepted")
+    } catch SessionDiagnosticFailure.unexpectedCallback(let stage, let hash, let method) {
+        #expect(stage == .query); #expect(hash == 0x12345678); #expect(method == 7); #expect(transport.cancelled)
+    } catch { Issue.record("Callback failed without safe stage classification") }
 }

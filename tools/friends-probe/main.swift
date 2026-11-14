@@ -11,7 +11,7 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 480), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Read-only Experiment (session diagnostics 6)"
+        window.title = "Waypoint Friends — Read-only Experiment (session diagnostics 8)"
         window.isReleasedWhenClosed = false; window.delegate = self
         let title = NSTextField(labelWithString: "Battle.net connection and session diagnostics")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
@@ -62,15 +62,16 @@ import WaypointCore
                 self.output.string = [
                     "Bindless RPC accepted: \(yesNo(report.bindlessAccepted))",
                     "Connection identity field present: \(yesNo(report.connectionIdentityPresent))",
-                    "Logon BattleTag field present: \(yesNo(report.logonBattleTagPresent))",
-                    "Logon game-account field present: \(yesNo(report.logonGameAccountPresent))",
-                    "Logon session-key field present: \(yesNo(report.logonSessionKeyPresent))",
+                    "Logon field 3 present (desktop: BattleTag): \(yesNo(report.logonRecordHasField3))",
+                    "Logon field 2 present (desktop: game account): \(yesNo(report.logonRecordHasField2))",
+                    "Logon field 5 present (desktop: session key): \(yesNo(report.logonRecordHasField5))",
                     "Existing-session query status: \(report.sessionQueryStatus)",
                     "Server session identity returned: \(yesNo(report.serverSessionIDPresent))",
-                ].joined(separator: "\n")
+                ].joined(separator: "\n") + "\nLogon format (no values):\n" + report.logonRecordShape.joined(separator: "\n")
                 self.status.stringValue = "Session diagnostics complete. No session creation request sent; connection closed."
             } catch is CancellationError { self.status.stringValue = "Cancelled. No saved login changed." }
             catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Connection/authentication refused (status \(code)); session-state query was not completed. Saved login unchanged." }
+            catch let error as SessionDiagnosticFailure { self.status.stringValue = error.localizedDescription + " Saved login unchanged." }
             catch NativeGameAccounts.Failure.owner { self.status.stringValue = "Account identity mismatch. Result discarded." }
             catch { self.status.stringValue = "Could not complete session diagnostics. Saved login unchanged." }
         }

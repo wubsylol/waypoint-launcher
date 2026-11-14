@@ -20,8 +20,9 @@ public final class NativeGameAccounts {
     private enum ReplyKind { case native, friends, sessionDiagnostic }
     private typealias W = BGSWire
     private var recordsDiagnostics = false
+    private var diagnosticStage = SessionDiagnosticStage.connection
     private var diagnostics = NativeSessionDiagnostics(bindlessAccepted: nil, connectionIdentityPresent: false,
-        logonBattleTagPresent: false, logonGameAccountPresent: false, logonSessionKeyPresent: false,
+        logonRecordHasField3: false, logonRecordHasField2: false, logonRecordHasField5: false,
         sessionQueryStatus: 0, serverSessionIDPresent: nil)
     private let transport: any NativeAccountTransport
     private let timeout: Duration
@@ -54,16 +55,17 @@ public final class NativeGameAccounts {
             guard try W.uint(header, 1) == 254, try W.uint(header, 3) == 0,
                   try W.uint(header, 6, default: 0) == 0 else { throw Failure.unavailable }
             if recordsDiagnostics {
+                diagnosticStage = .connectionMetadata
                 let connection = try W.decode(connectionReply)
-                if connection[7] != nil {
-                    let accepted = try W.uint(connection, 7)
-                    guard accepted <= 1 else { throw Failure.unavailable }
+                if let values = connection[7], values.count == 1,
+                   case .number(let accepted) = values[0], accepted <= 1 {
                     diagnostics.bindlessAccepted = accepted == 1
                 }
-                if connection[9] != nil { diagnostics.connectionIdentityPresent = !(try W.data(connection, 9)).isEmpty }
+                diagnostics.connectionIdentityPresent = connection[9] != nil
             }
             let request = W.number(1, 5_730_135) + W.text(2, "Mc64") + W.text(3, "enUS")
                 + W.number(4, build) + W.bytes(10, W.text(1, token.value))
+            if recordsDiagnostics { diagnosticStage = .authentication }
             _ = try await call(hash: 0xc02f8216, method: 1, body: request)
             while !loggedIn {
                 let (header, body) = try await receive()
@@ -144,26 +146,31 @@ public final class NativeGameAccounts {
     /// creation, restoration, destruction or mark-alive request.
     public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region) async throws -> NativeSessionDiagnostics {
         recordsDiagnostics = true
-        return try await authenticated(token: token, build: build, region: region) {
-            do {
-                let reply = try await call(hash: 0x7b37d770, method: 5, replyKind: .sessionDiagnostic)
-                let response = try W.decode(reply)
-                diagnostics.serverSessionIDPresent = false
-                if response[1] != nil {
-                    let state = try W.decode(W.data(response, 1))
-                    if state[1] != nil {
-                        let identity = try W.decode(W.data(state, 1))
-                        guard try W.uint(identity, 1) == expectedOwner else { throw Failure.owner }
-                        diagnostics.serverSessionIDPresent = true
+        do {
+            return try await authenticated(token: token, build: build, region: region) {
+                do {
+                    diagnosticStage = .query
+                    let reply = try await call(hash: 0x7b37d770, method: 5, replyKind: .sessionDiagnostic)
+                    diagnosticStage = .response
+                    let response = try W.decode(reply)
+                    diagnostics.serverSessionIDPresent = false
+                    if response[1] != nil {
+                        let state = try W.decode(W.data(response, 1))
+                        if state[1] != nil {
+                            let identity = try W.decode(W.data(state, 1))
+                            guard try W.uint(identity, 1) == expectedOwner else { throw Failure.owner }
+                            diagnostics.serverSessionIDPresent = true
+                        }
                     }
+                    diagnostics.sessionQueryStatus = 0
+                } catch SessionDiagnosticRefusal.response(let code) {
+                    diagnostics.sessionQueryStatus = code
+                    diagnostics.serverSessionIDPresent = nil
                 }
-                diagnostics.sessionQueryStatus = 0
-            } catch SessionDiagnosticRefusal.response(let code) {
-                diagnostics.sessionQueryStatus = code
-                diagnostics.serverSessionIDPresent = nil
+                return diagnostics
             }
-            return diagnostics
-        }
+        } catch is W.Failure { throw SessionDiagnosticFailure.malformed(diagnosticStage) }
+        catch Failure.unavailable { throw SessionDiagnosticFailure.unavailable(diagnosticStage) }
     }
 
     private func send(service: UInt64, method: UInt64, token: UInt64, body: Data, hash: UInt32? = nil) async throws {
@@ -218,7 +225,10 @@ public final class NativeGameAccounts {
     }
     private func notification(_ header: W.Message, _ body: Data) throws {
         let hash = try W.uint(header, 11), method = try W.uint(header, 2) & 0x3fff_ffff
-        guard hash == 0x9da8116b || hash == 0xecb8b826 else { throw Failure.unavailable }
+        guard hash == 0x9da8116b || hash == 0xecb8b826 else {
+            if recordsDiagnostics { throw SessionDiagnosticFailure.unexpectedCallback(diagnosticStage, service: hash, method: method) }
+            throw Failure.unavailable
+        }
         switch method {
         case 1:
             let message = try W.decode(body), status = try W.uint(message, 1, default: 0)
@@ -226,16 +236,26 @@ public final class NativeGameAccounts {
             let record = try W.decode(W.data(message, 2))
             guard try W.uint(record, 1) == expectedOwner else { throw Failure.owner }
             if recordsDiagnostics {
-                if record[3] != nil { diagnostics.logonBattleTagPresent = !(try W.data(record, 3)).isEmpty }
-                if record[2] != nil { diagnostics.logonGameAccountPresent = !(try W.data(record, 2)).isEmpty }
-                if record[5] != nil { diagnostics.logonSessionKeyPresent = !(try W.data(record, 5)).isEmpty }
+                // Desktop schema names are only hypotheses for this game reply.
+                // Observe optional metadata instead of enforcing its wire type.
+                diagnostics.logonRecordHasField3 = record[3] != nil
+                diagnostics.logonRecordHasField2 = record[2] != nil
+                diagnostics.logonRecordHasField5 = record[5] != nil
+                diagnostics.logonRecordShape = record.keys.sorted().prefix(64).map { field in
+                    let categories = Set((record[field] ?? []).map { value in
+                        switch value { case .number: "numeric"; case .bytes: "length-delimited" }
+                    }).sorted().joined(separator: "/")
+                    return "field \(field): \(categories)"
+                }
             }
             loggedIn = true
         case 2:
             let state = try W.decode(W.data(W.decode(body), 1))
             for field in state.keys { _ = try W.uint(state, field) }
         case 3: guard body.isEmpty else { throw Failure.unavailable }
-        default: throw Failure.unavailable // Never answer an external challenge.
+        default:
+            if recordsDiagnostics { throw SessionDiagnosticFailure.unexpectedCallback(diagnosticStage, service: hash, method: method) }
+            throw Failure.unavailable // Never answer an external challenge.
         }
         // These listener methods are NO_RESPONSE: do not send RPC acknowledgements.
     }

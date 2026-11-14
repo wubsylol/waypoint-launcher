@@ -201,3 +201,42 @@ not evidence that the user has no other sessions. The transport closes normally.
 
 23 targeted native/probe checks pass, including exact read-only dispatch,
 refusal handling and a wrong-owner response. Live result recorded separately.
+
+Version0.0.6 live attempt ended with generic failure after a likely Keychain
+permission prompt (the user approved it; exact prompt was not observed). It did
+not return a diagnostic report, so no claim about session state follows. No
+Create/Restore/DestroySession request was implemented or sent by the probe.
+
+Version0.0.7 adds static failure-stage labels (connection setup, metadata,
+authentication, existing-session query, reply parsing). Only protocol service
+hash/method may accompany unsupported-callback labels; no payload or private
+identifier is included. Underlying localized error strings are not printed.
+Only the explicit diagnostics mode uses these labels; ordinary discovery is
+unchanged.25 targeted checks pass, including malformed metadata and a callback
+at query time. No new RPC is introduced by this diagnostic refinement.
+
+Version0.0.7 live result: Unexpected data format during authentication. The
+session-query stage had not started. The metadata reader had imposed desktop
+schema field types on optional game-logon fields; those assumptions were not
+verified. It did not return a report or modify saved login data.
+
+Version0.0.8 observes optional metadata instead: neutral field2/3/5 presence
+flags and at most64 sorted field-number/type-category labels (numeric or
+length-delimited). No field values, byte lengths, repetition counts, identifiers
+or secrets are included. Desktop names in the UI are explicitly hints, not
+assertions about the game reply. An unknown optional boolean is unknown, not
+an authentication failure. Required owner/status/frame checks remain strict.
+25 native/probe checks pass after the change, including a variant-metadata
+fixture. The wire request remains GetSessionState only; no session mutation.
+
+Version0.0.8 live result: authentication and metadata observation completed.
+Bindless acceptance was not reported; a connection identity field was present.
+Logon fields1/6 were numeric and2/3/4/5/7 length-delimited. No values or repetition
+counts were captured. GetSessionState returned correlated status7
+(ERROR_INVALID_ARGS); session existence remains unknown. Presence/categories
+alone do not validate semantic names or justify assuming a session key/BattleTag.
+
+The optional metadata fix also avoids using a singular getter on fields that
+may be repeated (the desktop schema labels logon game_account2 repeated).
+The failure of v6/v7 therefore is not evidence that the server uses a different
+schema. It was an instrumentation assumption, not proof of failed credentials.
