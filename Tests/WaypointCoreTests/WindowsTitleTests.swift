@@ -151,7 +151,7 @@ private func windowsFixture(_ title: WindowsTitle) throws -> Data {
         let product = title.product
         #expect(product.installationDisplayName(platform: .macOS) == product.displayName)
         let label = product.installationDisplayName(platform: .windows)
-        #expect(label.contains(title.compatibilityLabel))
+        #expect(label == "\(product.displayName) (Windows)")
         #expect(!label.contains("Preview"))
         #expect(product.uid == title.uid)
     }
