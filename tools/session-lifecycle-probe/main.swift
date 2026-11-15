@@ -14,12 +14,12 @@ import WaypointCore
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 660, height: 540),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint — App Session Lifecycle Test 2"
+        window.title = "Waypoint — App Session Presence Session Test 3"
         window.delegate = self
         window.isReleasedWhenClosed = false
         let title = NSTextField(labelWithString: "Temporary application session — explicit test")
         title.font = .systemFont(ofSize: 18, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Run only after agreeing to this test. Close Blizzard games and official Battle.net launchers on both Macs. This requests a fresh App credential, authenticates, creates one session bound to its own App handle, verifies the reply/callback, then requests destruction in the same context and waits up to five seconds for its callback (within the overall connection deadline). It may affect another client or visible presence. No friends/presence queries, status updates or messages are sent. A disconnect, cancellation or failed identity check can leave cleanup unconfirmed; there is no automatic retry or reconnect. Saved login is not replaced.")
+        let explanation = NSTextField(wrappingLabelWithString: "Run only after agreeing to this test. Close Blizzard games and official Battle.net launchers on both Macs. This requests a fresh App credential, authenticates, creates one session bound to its own App handle, verifies the reply/callback, then requests destruction in the same context and waits up to five seconds for its callback (within the overall connection deadline). It may affect another client or visible presence. Before cleanup, reads fresh friend IDs and queries presence for at most three friends. No names, IDs or activity text are displayed. No status updates, subscriptions or messages are sent. A disconnect, cancellation or failed identity check can leave cleanup unconfirmed; there is no automatic retry or reconnect. Saved login is not replaced.")
         button = NSButton(title: "Create and clean up App session", target: self, action: #selector(run))
         let stop = NSButton(title: "Stop connection", target: self, action: #selector(stop))
         let actions = NSStackView(views: [button, stop, NSView()]); actions.spacing = 12
@@ -73,12 +73,13 @@ import WaypointCore
                       game.buildID > 0, app.buildID > 0, game.region == "us", app.region == "us" else {
                     self.status.stringValue = "Account/client state or metadata changed. No lifecycle request made."; return
                 }
-                let report = try await NativeGameAccounts().applicationSessionLifecycleTest(token: token,
+                let report = try await NativeGameAccounts().applicationSessionPresenceTest(token: token,
                     build: UInt64(game.buildID), applicationBuild: UInt64(app.buildID), region: .us)
                 func yes(_ value: Bool) -> String { value ? "yes" : "no" }
                 let same = report.instanceMatchesAuthenticationContext.map(yes) ?? "unknown"
                 let refusal = report.refusalCode.map { String($0) } ?? "none reported"
-                self.output.string = "Creation response owner/binding verified: \(yes(report.creationResponseVerified))\nCreation callback verified: \(yes(report.creationCallbackVerified))\nInstance matches authentication context: \(same)\nDestroy request accepted: \(yes(report.destroyRequestAccepted))\nMatching destruction callback observed: \(yes(report.destructionCallbackVerified))\nRefusal code: \(refusal)\n\n\(report.outcome)\n\nNo identifiers or keys are shown. No automatic retry."
+                let sample = report.presenceSummary.map { "Sampled friends: \($0.sampledFriends)\nStates: \($0.states)\nField kinds: \($0.fieldKinds.sorted().joined(separator: ", "))\nGame titles (not proof of activity): \($0.gameTitles.sorted().joined(separator: ", "))" } ?? "No presence sample returned"
+                self.output.string = "Presence: \(report.presenceStatus)\n\(sample)\n\nCreation response owner/binding verified: \(yes(report.creationResponseVerified))\nCreation callback verified: \(yes(report.creationCallbackVerified))\nInstance matches authentication context: \(same)\nDestroy request accepted: \(yes(report.destroyRequestAccepted))\nMatching destruction callback observed: \(yes(report.destructionCallbackVerified))\nRefusal code: \(refusal)\n\n\(report.outcome)\n\nNo identifiers or keys are shown. No automatic retry."
                 self.status.stringValue = "Lifecycle test finished; connection closed. Read the cleanup outcome above. Saved login data unchanged."
             } catch {
                 // Core returns a report for every failure after possible CreateSession

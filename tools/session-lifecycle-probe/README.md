@@ -91,3 +91,16 @@ other-client coexistence or presence access. 63 targeted tests pass, including
 both destruction callback orders, a foreign post-ack callback, and a stalled
 callback deadline with no retry.
 A fresh explicit live-test approval is required.
+
+## Presence-in-session control3 (prepared, not run)
+
+Explicit opt-in applicationSessionPresenceTest adds a fresh ID-only friends read
+and presence Query5 for at most three friends after verified creation, before
+Destroy. It keeps the previous four candidate BN keys, explicit unique_id zero,
+and INCLUDE_ALL_GAME_ACCOUNTS behavior unchanged to isolate session setup. Only
+aggregate field types, counts and allowlisted game labels leave the core. No
+status updates, subscriptions or messages. Presence refusal is distinct from
+cleanup status and triggers same-context cleanup without presence retry.
+66 targeted tests pass, including capped sampling and refusal followed by verified
+cleanup, plus wrong-friend/malformed presence responses stopping all requests. User authorized continued presence testing on 2026-11-15; keep clients
+closed, stop on unconfirmed cleanup, and do not expand into messaging yet.

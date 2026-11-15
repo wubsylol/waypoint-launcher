@@ -1000,3 +1000,57 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
     #expect(report.outcome.contains("unconfirmed"))
     #expect(target.cancelled && target.written.count == 4)
 }
+
+@Test @MainActor func appLifecyclePresenceSamplesThreeThenVerifiesCleanup() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let roster = [42,43,44,45].map { BGSWire.bytes(1, BGSWire.number(1, UInt64($0))) }.reduce(Data(), +)
+    var replies = appLifecycleAuthReplies() + [accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity())),
+        appLifecycleNotification(1), accountFrame(token: 3, body: roster)]
+    for (index, id) in [42,43,44].enumerated() { replies.append(accountFrame(token: UInt64(index + 4), body: presencePage(friend: UInt64(id)))) }
+    replies += [accountFrame(token: 7), appLifecycleNotification(2)]
+    let target = AccountTestTransport(replies.reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us,
+        applicationClient: NativeGameAccounts(transport: target), samplePresence: true)
+    #expect(report.presenceSummary?.sampledFriends == 3 && report.presenceSummary?.states == 3)
+    #expect(report.destroyRequestAccepted && report.destructionCallbackVerified)
+    #expect(target.written.count == 8 && target.cancelled)
+    for (index, packet) in target.written.dropFirst(2).enumerated() {
+        let length = Int(packet[0]) * 256 + Int(packet[1])
+        let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+        #expect(try BGSWire.data(header, 13) == Data("synthetic-app-context".utf8))
+        #expect(try BGSWire.uint(header, 11) == [0x7b37d770,0x5869be8c,0x138d200c,0x138d200c,0x138d200c,0x7b37d770][index])
+    }
+}
+
+@Test @MainActor func appLifecyclePresenceRefusalStillCleansUpWithoutRetry() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let h = BGSWire.number(1, 254) + BGSWire.number(3, 4) + BGSWire.number(6, 7)
+    let refused = Data([UInt8(h.count >> 8), UInt8(h.count & 255)]) + h
+    let replies = appLifecycleAuthReplies() + [accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity())),
+        appLifecycleNotification(1), accountFrame(token: 3, body: BGSWire.bytes(1, BGSWire.number(1, 42))),
+        refused, accountFrame(token: 5), appLifecycleNotification(2)]
+    let target = AccountTestTransport(replies.reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us,
+        applicationClient: NativeGameAccounts(transport: target), samplePresence: true)
+    #expect(report.presenceStatus == "Presence query refused (7)" && report.presenceSummary == nil)
+    #expect(report.destroyRequestAccepted && report.destructionCallbackVerified)
+    #expect(target.written.count == 6 && target.cancelled)
+}
+
+@Test @MainActor func appLifecycleInvalidPresenceStopsWithoutFurtherRequests() async throws {
+    for body in [presencePage(friend: 999), BGSWire.number(1, 1)] {
+        let source = AccountTestTransport(applicationIssuanceReplies())
+        let replies = appLifecycleAuthReplies() + [accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity())),
+            appLifecycleNotification(1), accountFrame(token: 3, body: BGSWire.bytes(1, BGSWire.number(1, 42))),
+            accountFrame(token: 4, body: body)]
+        let target = AccountTestTransport(replies.reduce(Data(), +))
+        let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us,
+            applicationClient: NativeGameAccounts(transport: target), samplePresence: true)
+        #expect(report.creationCallbackVerified && !report.destroyRequestAccepted)
+        #expect(report.outcome.contains("unconfirmed") && report.presenceSummary == nil)
+        #expect(target.cancelled && target.written.count == 5)
+    }
+}

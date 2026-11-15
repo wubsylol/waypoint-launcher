@@ -2,6 +2,8 @@ import Foundation
 
 /// Only fixed labels and booleans cross the lifecycle test's public boundary.
 public struct ApplicationSessionTestReport: Sendable {
+    public var presenceSummary: PresenceQuerySummary?
+    public var presenceStatus = "Not requested"
     public var creationResponseVerified = false
     public var creationCallbackVerified = false
     public var instanceMatchesAuthenticationContext: Bool?
@@ -124,7 +126,8 @@ final class ApplicationSessionLifecycle {
     func recordFailure(_ error: Error) {
         switch error {
         case ApplicationSessionTestFailure.identity, NativeGameAccounts.Failure.owner,
-             AuthenticationContextFailure.missingClientID:
+             AuthenticationContextFailure.missingClientID,
+             PresenceQueryFailure.identity, PresenceQueryFailure.malformed:
             identityConflict = true
         case is BGSWire.Failure:
             identityConflict = true

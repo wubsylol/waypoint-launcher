@@ -271,8 +271,14 @@ public final class NativeGameAccounts {
             region: region, applicationClient: NativeGameAccounts())
     }
 
+    /// Read-only presence sample inside a consequential temporary App session.
+    public func applicationSessionPresenceTest(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws -> ApplicationSessionTestReport {
+        try await applicationSessionLifecycleTest(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts(), samplePresence: true)
+    }
+
     func applicationSessionLifecycleTest(token: LoginToken, build: UInt64, applicationBuild: UInt64,
-                                        region: Region, applicationClient: NativeGameAccounts) async throws -> ApplicationSessionTestReport {
+                                        region: Region, applicationClient: NativeGameAccounts, samplePresence: Bool = false) async throws -> ApplicationSessionTestReport {
         guard applicationBuild > 0 else { throw ApplicationSessionTestFailure.unavailable }
         let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
         try Task.checkCancellation()
@@ -285,6 +291,8 @@ public final class NativeGameAccounts {
             guard let record = applicationClient.applicationLogonRecord,
                   let context = applicationClient.logonNotificationClientID else { throw ApplicationSessionTestFailure.unavailable }
             let lifecycle = try ApplicationSessionLifecycle(owner: applicationClient.expectedOwner, record: record, context: context)
+            var presenceSummary: PresenceQuerySummary?
+            var presenceStatus = "Not requested"
             applicationClient.sessionLifecycle = lifecycle
             defer { applicationClient.sessionLifecycle = nil; applicationClient.applicationLogonRecord = nil; applicationClient.capturesApplicationHandle = false }
             do {
@@ -296,6 +304,29 @@ public final class NativeGameAccounts {
                 while !lifecycle.confirmed {
                     let (header, body) = try await applicationClient.receive()
                     try applicationClient.notification(header, body)
+                }
+                if samplePresence {
+                    presenceStatus = "Friends lookup did not complete"
+                    let friends = try await applicationClient.readFriends(protocolVersion: .authenticatedContext, fetchNames: false)
+                    var summary = PresenceQuerySummary()
+                    presenceStatus = "Presence query did not complete"
+                    for friend in friends.prefix(3) {
+                        try Task.checkCancellation()
+                        guard lifecycle.confirmed, !lifecycle.report.destructionCallbackVerified,
+                              let id = UInt64(friend.id), id > 0 else { throw ApplicationSessionTestFailure.identity }
+                        do {
+                            let reply = try await applicationClient.call(hash: 0x138d200c, method: 5,
+                                body: PresenceDiagnosticPage.request(friendID: id), replyKind: .presenceQuery)
+                            let page = try PresenceDiagnosticPage.decode(reply, expectedFriend: id)
+                            summary.sampledFriends += 1; summary.states += page.states
+                            summary.fieldKinds.formUnion(page.fieldKinds); summary.gameTitles.formUnion(page.gameTitles)
+                        } catch PresenceQueryFailure.refused(let code) {
+                            presenceStatus = "Presence query refused (\(code))"
+                            throw PresenceQueryFailure.refused(code)
+                        }
+                    }
+                    presenceSummary = summary
+                    presenceStatus = friends.isEmpty ? "Friends list empty; no presence query sent" : "Presence sample succeeded"
                 }
                 guard !lifecycle.report.destructionCallbackVerified else { throw ApplicationSessionTestFailure.unavailable }
                 try lifecycle.markDestroySubmitted()
@@ -315,7 +346,9 @@ public final class NativeGameAccounts {
                     } catch { lifecycle.recordFailure(error) }
                 }
             }
-            return lifecycle.report
+            var report = lifecycle.report
+            report.presenceSummary = presenceSummary; report.presenceStatus = presenceStatus
+            return report
         }
     }
 
