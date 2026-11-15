@@ -21,6 +21,7 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
     @ObservationIgnored private let ledger = UpdateAlertLedger()
     @ObservationIgnored private var pendingAlerts = Set<String>()
     @ObservationIgnored private var notificationsWereEnabled = false
+    @ObservationIgnored private var friendsOpen = false
     @ObservationIgnored private var libraryOpen = false
     @ObservationIgnored private var settingsOpen = false
     @ObservationIgnored private var statusRefresh: Task<Void, Never>?
@@ -78,6 +79,7 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    func setFriendsOpen(_ open: Bool) { friendsOpen = open; syncDockPolicy() }
     func setLibraryOpen(_ open: Bool) { libraryOpen = open; syncDockPolicy() }
     func setSettingsOpen(_ open: Bool) {
         settingsOpen = open
@@ -149,12 +151,12 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
             defaults.set(false, forKey: UpdatePreferences.hideDockKey)
         }
         let showDock = AppPresentationPolicy.showsDock(hideDock: defaults.bool(forKey: UpdatePreferences.hideDockKey),
-                                                      menuBarEnabled: menuEnabled, windowsOpen: libraryOpen || settingsOpen)
+                                                      menuBarEnabled: menuEnabled, windowsOpen: libraryOpen || settingsOpen || friendsOpen)
         let policy: NSApplication.ActivationPolicy = showDock ? .regular : .accessory
         if NSApp.activationPolicy() != policy {
             let applied = NSApp.setActivationPolicy(policy)
             Log.info(.app, "presentation_changed", nil, ["shows_dock": showDock,
-                "windows_open": libraryOpen || settingsOpen, "applied": applied])
+                "windows_open": libraryOpen || settingsOpen || friendsOpen, "applied": applied])
         }
     }
 

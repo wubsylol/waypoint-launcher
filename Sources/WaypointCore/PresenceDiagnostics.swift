@@ -6,6 +6,9 @@ public struct FriendPresenceRow: Sendable {
     public let status: String
     public let games: [String]
     public let activity: String?
+    public init(battleTag: String?, status: String, games: [String], activity: String?) {
+        self.battleTag = battleTag; self.status = status; self.games = games; self.activity = activity
+    }
 }
 
 /// Public diagnostic fields are aggregate-only; private decoded values feed the opt-in viewer.

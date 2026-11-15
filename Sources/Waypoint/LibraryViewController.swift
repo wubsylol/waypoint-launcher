@@ -407,6 +407,13 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        if identifier.rawValue == "friends" {
+            let item = NSToolbarItem(itemIdentifier: identifier)
+            item.label = "Friends"; item.toolTip = "Open friends (experimental)"
+            item.image = NSImage(systemSymbolName: "person.2", accessibilityDescription: "Friends")
+            item.target = NSApp.delegate; item.action = #selector(AppDelegate.showFriends(_:))
+            return item
+        }
         if identifier == .account {
             let item = NSMenuToolbarItem(itemIdentifier: identifier)
             item.image = .account(model.activeAccount)
@@ -422,11 +429,11 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, .account]
+        [.flexibleSpace, NSToolbarItem.Identifier("friends"), .account]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, .account]
+        [.flexibleSpace, NSToolbarItem.Identifier("friends"), .account]
     }
 
     // MARK: NSTableViewDataSource, NSTableViewDelegate

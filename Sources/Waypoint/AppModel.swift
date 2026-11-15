@@ -197,6 +197,41 @@ final class AppModel {
     private let loginWindow = LoginWindow()
     /// Per bundle id, like the web sessions, so test builds never share
     /// keychain items with the installed app.
+    private(set) var isRefreshingExperimentalFriends = false
+    private(set) var experimentalFriendsCleanupUnconfirmed = false
+
+    /// Experimental social reads never invoke interactive sign-in or replace a token.
+    func experimentalFriendsSnapshot(accountID: String) async throws -> ApplicationSessionTestReport {
+        guard !isSigningIn, !isPreparingToQuit, !experimentalFriendsCleanupUnconfirmed else { throw FriendsPanelFailure.unavailable }
+        isRefreshingExperimentalFriends = true
+        defer { isRefreshingExperimentalFriends = false }
+        guard activeAccount?.id == accountID else { throw FriendsPanelFailure.accountChanged }
+        func hasConflictingClient() -> Bool {
+            RunningProcesses.executables().contains {
+                let name = URL(fileURLWithPath: $0.path).lastPathComponent
+                return ["World of Warcraft", "Hearthstone", "Heroes of the Storm", "StarCraft", "Diablo", "Overwatch", "Warcraft III", "Battle.net"].contains { name.hasPrefix($0) }
+            }
+        }
+        guard !hasConflictingClient() else { throw FriendsPanelFailure.gamesRunning }
+        guard let token = tokenVault.token(account: accountID, codename: "WoW"), token.accountID == accountID else { throw FriendsPanelFailure.unavailable }
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false; config.timeoutIntervalForRequest = 10; config.timeoutIntervalForResource = 20
+        let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+        let versions = VersionService(session: session)
+        let game = try await versions.latest(product: "wowf", region: .us)
+        let app = try await versions.latest(product: "bna", region: .us)
+        try Task.checkCancellation()
+        guard activeAccount?.id == accountID else { throw FriendsPanelFailure.accountChanged }
+        guard !hasConflictingClient() else { throw FriendsPanelFailure.gamesRunning }
+        guard game.buildID > 0, app.buildID > 0, game.region == "us", app.region == "us" else { throw FriendsPanelFailure.unavailable }
+        let report = try await NativeGameAccounts().applicationFriendsPresenceViewer(token: token,
+            build: UInt64(game.buildID), applicationBuild: UInt64(app.buildID), region: .us)
+        if report.creationResponseVerified || report.outcome.contains("cleanup unconfirmed") {
+            experimentalFriendsCleanupUnconfirmed = !(report.destroyRequestAccepted && report.destructionCallbackVerified)
+        }
+        return report
+    }
+
     private let tokenVault = TokenVault(service: "\(Bundle.main.bundleIdentifier ?? "Waypoint"): Battle.net login tokens")
     private let credentialVault = CredentialVault(service: "\(Bundle.main.bundleIdentifier ?? "Waypoint"): Battle.net passwords")
     private var observers: [NSObjectProtocol] = []
@@ -943,7 +978,7 @@ final class AppModel {
     /// Only one sign-in at a time: the login window and the hidden web view
     /// each serve a single request.
     var isSigningIn: Bool {
-        isAddingAccount || isManagingSavedLogin || isSelectingGameAccount || isRefreshingNativeProfile || phases.values.contains {
+        isAddingAccount || isManagingSavedLogin || isSelectingGameAccount || isRefreshingNativeProfile || isRefreshingExperimentalFriends || phases.values.contains {
             switch $0 { case .signingIn, .preparingWindows, .launching: true; default: false }
         }
     }

@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     let backgroundServices = BackgroundServices()
     private var libraryWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var friendsWindow: NSWindow?
     private var menuBarItem: MenuBarItem?
     private var isTerminating = false
 
@@ -55,6 +56,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if model.isRefreshingExperimentalFriends {
+            let alert = NSAlert()
+            alert.messageText = "Friends is still refreshing"
+            alert.informativeText = "Wait for the refresh and connection cleanup to finish before quitting."
+            alert.addButton(withTitle: "Keep Waypoint Open")
+            alert.runModal()
+            return .terminateCancel
+        }
         guard model.hasActiveDownloads || isTerminating else { return .terminateNow }
         if !isTerminating {
             isTerminating = true
@@ -125,6 +134,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return window
     }
 
+    @objc func showFriends(_ sender: Any?) {
+        let window: NSWindow
+        if let existing = friendsWindow { window = existing }
+        else {
+            window = NSWindow(contentViewController: FriendsViewController(model: model))
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.title = "Friends — Waypoint"
+            window.delegate = self
+            window.contentMinSize = NSSize(width: 300, height: 420)
+            window.setContentSize(NSSize(width: 340, height: 600))
+            window.isReleasedWhenClosed = false
+            if !window.setFrameUsingName("FriendsExperiment") { window.center() }
+            window.setFrameAutosaveName("FriendsExperiment")
+            friendsWindow = window
+        }
+        backgroundServices.setFriendsOpen(true)
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     @objc func showSettings(_ sender: Any?) {
         let window = settingsWindow ?? NSWindow(contentViewController: SettingsViewController(model: model, backgroundServices: backgroundServices))
         window.styleMask = [.titled, .closable]
@@ -140,6 +170,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     /// A closed library is let go, views and all; reopening builds a new one.
     func windowWillClose(_ notification: Notification) {
+        if notification.object as? NSWindow === friendsWindow {
+            backgroundServices.setFriendsOpen(false)
+        }
         if notification.object as? NSWindow === libraryWindow {
             libraryWindow = nil
             backgroundServices.setLibraryOpen(false)
