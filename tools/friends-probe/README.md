@@ -1,10 +1,11 @@
 # Battle.net friends experiment
 
-Current mode: version0.0.16, application-authenticated count-only friends
-preflight (button: Test application friends access). First live result:45
-records returned; names, presence and completeness remain unverified. The
-older modes below are historical. Current mode includes temporary credential
-issuance and is not accurately described as entirely read-only.
+Current mode: version0.0.17, opt-in local BattleTag viewer. Refresh Friends
+uses the working version16 backend. Names remain hidden until Show Friends;
+no list is exported or saved. The previous count-only live result returned45
+records. Name correctness/completeness remains user-verified only; presence and
+messaging are untested. Older modes below are historical. Temporary credential
+issuance means this is not an entirely read-only RPC sequence.
 
 Branch: `experiment/battlenet-friends`. Do not merge or push this experiment to
 `main`. This is a bounded social-read probe, not a supported social/chat client.
@@ -441,3 +442,24 @@ list correctness, real-time updates or chat support.
 42 native/probe checks pass, including new exact App title/fresh-token/context
 wire assertions, missing-context stop and refusal-stage checks. Independent
 review found no blockers. Live result recorded separately.
+
+## Local BattleTag viewer (version 0.0.17)
+
+Backend unchanged from version16. Refresh Friends requests a new bounded
+application-authenticated snapshot, with all earlier live-test boundaries.
+A successful fetch initially shows only its count. Show Friends reveals a local
+AppKit table; Hide Friends conceals it again. Filtering is local and sends no
+network request. No online status or messaging capability is implied.
+
+The UI retains BattleTag strings only (or a numbered missing-tag placeholder),
+not raw friend IDs, real names, notes or attributes. Nothing is exported or
+written to preferences/logs. Refresh/Cancel clear the snapshot. Account owner is
+rechecked on reveal, filtering and app activation; a different selected account
+clears it. The snapshot is labeled with its owning account. Quit closes the
+process and its in-memory state. A cancelled network task cannot repopulate it.
+
+The operator should not inspect the UI after Show Friends is clicked: the user
+can confirm names/completeness locally without including a friends list in a
+transcript. Ask only whether the expected friends appear and whether any
+BattleTag placeholders remain. The existing42 backend checks remain the latest
+network/parser tests; this UI-only change is built and independently reviewed.
