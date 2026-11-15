@@ -552,3 +552,57 @@ private func authenticatedContextReplies(logonID: String? = "synthetic-authentic
     catch { Issue.record("Cancelled target transport was mislabeled as authentication failure") }
     #expect(source.written.count == 3 && target.written.count == 2)
 }
+
+private func applicationIssuanceReplies() -> Data {
+    (Array(accountReplies().prefix(3)) + [accountFrame(token: 2,
+        body: BGSWire.text(1, "US-dddddddddddddddddddddddddddddddd-123"))]).reduce(Data(), +)
+}
+
+@Test @MainActor func applicationFriendsUsesApplicationLogonAndVerifiedContextOnly() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport(authenticatedContextReplies().reduce(Data(), +))
+    let result = try await NativeGameAccounts(transport: source).applicationFriendsPreflight(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(result.count == 1)
+    #expect(source.cancelled && target.cancelled)
+    #expect(source.written.count == 3 && target.written.count == 3)
+    let auth = target.written[1], authLength = Int(auth[0]) * 256 + Int(auth[1])
+    let authBody = try BGSWire.decode(Data(auth.dropFirst(2 + authLength)))
+    #expect(try BGSWire.uint(authBody, 1) == 0x417070)
+    #expect(try BGSWire.uint(authBody, 4) == 17986)
+    let options = try BGSWire.decode(BGSWire.data(authBody, 10))
+    #expect(try BGSWire.data(options, 1) == Data("US-dddddddddddddddddddddddddddddddd-123".utf8))
+    let packet = target.written[2], length = Int(packet[0]) * 256 + Int(packet[1])
+    let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+    #expect(try BGSWire.uint(header, 11) == 0x5869be8c)
+    #expect(try BGSWire.uint(header, 2) == 5)
+    #expect(try BGSWire.data(header, 13) == Data("synthetic-authenticated-id".utf8))
+    #expect(packet.dropFirst(2 + length).isEmpty)
+}
+
+@Test @MainActor func applicationFriendsMissingContextStopsBeforeSocialRequest() async {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport(authenticatedContextReplies(logonID: nil).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: source).applicationFriendsPreflight(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Missing context reached friends")
+    } catch AuthenticationContextFailure.missingClientID { #expect(target.written.count == 2) }
+    catch { Issue.record("Expected missing authenticated context") }
+    #expect(source.cancelled && target.cancelled)
+}
+
+@Test @MainActor func applicationFriendsRefusalRemainsSocialFailure() async {
+    let h = BGSWire.number(1, 254) + BGSWire.number(3, 2) + BGSWire.number(5, 0) + BGSWire.number(6, 3025)
+    let refused = Data([UInt8(h.count >> 8), UInt8(h.count & 255)]) + h
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport(Array(authenticatedContextReplies().prefix(3)).reduce(Data(), +) + refused)
+    do {
+        _ = try await NativeGameAccounts(transport: source).applicationFriendsPreflight(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Refused friends request succeeded")
+    } catch FriendSnapshotFailure.requestRejected(let code) { #expect(code == 3025) }
+    catch { Issue.record("Social refusal mislabeled as authentication failure") }
+    #expect(source.cancelled && target.cancelled)
+    #expect(target.written.count == 3)
+}

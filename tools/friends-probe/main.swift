@@ -11,12 +11,12 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 480), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Application Authentication Preflight 15"
+        window.title = "Waypoint Friends — Application Friends Preflight 16"
         window.isReleasedWhenClosed = false; window.delegate = self
-        let title = NSTextField(labelWithString: "Battle.net application authentication preflight")
+        let title = NSTextField(labelWithString: "Battle.net application-authenticated friends preflight")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Uses the saved WoW login to request a fresh same-owner App credential, closes that connection, then tests authentication as App using public desktop build metadata. Close Blizzard games on both Macs first. Keeps the credential in memory only. No friends lookup, session creation/destruction, presence changes or saved-login writes. Successful desktop authentication would not yet prove social access.")
-        button = NSButton(title: "Test application authentication", target: self, action: #selector(readFriends))
+        let explanation = NSTextField(wrappingLabelWithString: "Requests a temporary App credential using the saved WoW login, closes the source connection, authenticates as App, then makes one bounded friends lookup using the owner-verified application context. Close Blizzard games on both Macs first. No explicit session creation/destruction, subscription, messages, presence updates or saved-login writes. This diagnostic displays only the returned record count, never names or IDs.")
+        button = NSButton(title: "Test application friends access", target: self, action: #selector(readFriends))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelRead))
         let actions = NSStackView(views: [button, cancel, NSView()]); actions.spacing = 10
         output.isEditable = false; output.isRichText = false; output.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -41,7 +41,7 @@ import WaypointCore
         guard let account = AccountList.load(from: defaults).active else { status.stringValue = "Select an account in Waypoint first."; return }
         let vault = TokenVault(service: "io.wubs.waypoint-review: Battle.net login tokens")
         guard let token = vault.token(account: account.id, codename: "WoW"), token.accountID == account.id else { status.stringValue = "No saved WoW login is available. This test will not request another sign-in."; return }
-        button.isEnabled = false; status.stringValue = "Checking public game/application build metadata, then testing application authentication…"
+        button.isEnabled = false; status.stringValue = "Checking public build metadata, then testing friends access in the application context…"
         task = Task { [weak self] in
             guard let self else { return }
             defer { self.task = nil; self.button.isEnabled = true }
@@ -56,20 +56,22 @@ import WaypointCore
                 guard AccountList.load(from: self.defaults).activeID == account.id, !self.gameIsRunning(), version.buildID > 0, version.region == "us", applicationVersion.buildID > 0, applicationVersion.region == "us" else {
                     self.status.stringValue = "Account changed, WoW opened, or build metadata was unavailable. No connection made."; return
                 }
-                try await NativeGameAccounts().applicationAuthenticationPreflight(token: token, build: UInt64(version.buildID), applicationBuild: UInt64(applicationVersion.buildID), region: .us)
+                let friends = try await NativeGameAccounts().applicationFriendsPreflight(token: token, build: UInt64(version.buildID), applicationBuild: UInt64(applicationVersion.buildID), region: .us)
                 try Task.checkCancellation()
                 guard AccountList.load(from: self.defaults).activeID == account.id else { self.status.stringValue = "Account changed; result discarded."; return }
-                self.output.string = "Owner-verified application authentication succeeded. Temporary credential discarded; both connections closed.\nFriends access and explicit application-session lifecycle remain untested."
-                self.status.stringValue = "Application authentication check complete. Saved login unchanged."
+                self.output.string = "Application-authenticated friends request succeeded: \(friends.count) records returned.\nNames and IDs are not displayed or saved. Both connections closed."
+                self.status.stringValue = "Application friends check complete. Saved login unchanged."
             } catch is CancellationError { self.status.stringValue = "Cancelled. No saved login changed." }
             catch ApplicationCredentialFailure.refused(let code) { self.status.stringValue = "Signed in successfully; application credential request refused (\(code)). Saved login unchanged." }
             catch ApplicationCredentialFailure.format { self.status.stringValue = "Signed in successfully; application credential format was not recognized. Saved login unchanged." }
+            catch FriendSnapshotFailure.requestRejected(let code) { self.status.stringValue = "Application authentication succeeded; friends request refused (\(code)). Saved login unchanged." }
+            catch AuthenticationContextFailure.missingClientID { self.status.stringValue = "Application authentication succeeded; no usable authenticated client context was returned. No friends request sent." }
             catch ApplicationAuthenticationFailure.refused(let code) { self.status.stringValue = "App credential issued; application authentication refused (\(code)). Saved login unchanged." }
-            catch ApplicationAuthenticationFailure.owner { self.status.stringValue = "App credential issued; application login returned a different owner. Result discarded." }
-            catch ApplicationAuthenticationFailure.unavailable { self.status.stringValue = "App credential issued; application authentication could not complete. Saved login unchanged." }
+            catch ApplicationAuthenticationFailure.owner { self.status.stringValue = "App credential issued; application context identity mismatch. Result discarded." }
+            catch ApplicationAuthenticationFailure.unavailable { self.status.stringValue = "App credential issued; application/friends check could not complete. Saved login unchanged." }
             catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Connection/authentication refused (status \(code)); application credential preflight was not completed. Saved login unchanged." }
             catch NativeGameAccounts.Failure.owner { self.status.stringValue = "Account identity mismatch. Result discarded." }
-            catch { self.status.stringValue = "Could not complete the application authentication preflight. Saved login unchanged." }
+            catch { self.status.stringValue = "Could not complete the application friends preflight. Saved login unchanged." }
         }
     }
     @objc private func cancelRead() { task?.cancel(); output.string = "" }

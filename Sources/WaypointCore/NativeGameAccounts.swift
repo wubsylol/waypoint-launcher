@@ -139,6 +139,34 @@ public final class NativeGameAccounts {
         }
     }
 
+    /// Controlled social read after fresh, owner-verified App authentication.
+    /// No explicit session lifecycle, subscriptions, messages or persistent writes.
+    public func applicationFriendsPreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws -> [BattleNetFriend] {
+        try await applicationFriendsPreflight(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts())
+    }
+
+    func applicationFriendsPreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64,
+                                     region: Region, applicationClient: NativeGameAccounts) async throws -> [BattleNetFriend] {
+        guard applicationBuild > 0 else { throw ApplicationAuthenticationFailure.unavailable }
+        let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
+        try Task.checkCancellation()
+        do {
+            return try await applicationClient.friends(token: candidate, build: applicationBuild, region: region,
+                protocolVersion: .authenticatedContext, includeConnectionIdentity: false, titleID: 0x417070)
+        } catch {
+            try Task.checkCancellation()
+            switch error {
+            case is CancellationError: throw CancellationError()
+            case let refusal as FriendSnapshotFailure: throw refusal
+            case let context as AuthenticationContextFailure: throw context
+            case Failure.rejected(let code): throw ApplicationAuthenticationFailure.refused(code)
+            case Failure.owner: throw ApplicationAuthenticationFailure.owner
+            default: throw ApplicationAuthenticationFailure.unavailable
+            }
+        }
+    }
+
     public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
         try await authenticated(token: token, build: build, region: region) {
             let owner = expectedOwner
@@ -173,6 +201,12 @@ public final class NativeGameAccounts {
     /// subscription mode closes after its initial snapshot. Does not set presence,
     /// mutate friendships, send messages, or persist returned friend data.
     public func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol = .current, includeConnectionIdentity: Bool = false) async throws -> [BattleNetFriend] {
+        try await friends(token: token, build: build, region: region, protocolVersion: protocolVersion,
+            includeConnectionIdentity: includeConnectionIdentity, titleID: 0x576f57)
+    }
+
+    private func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol,
+                         includeConnectionIdentity: Bool, titleID: UInt64) async throws -> [BattleNetFriend] {
         if protocolVersion == .authenticatedContext {
             guard !includeConnectionIdentity else { throw Failure.unsupported }
             recordsDiagnostics = true
@@ -180,7 +214,7 @@ public final class NativeGameAccounts {
             usesAuthenticatedClientID = true
         }
         if includeConnectionIdentity { recordsDiagnostics = true; includesConnectionIdentity = true }
-        return try await authenticated(token: token, build: build, region: region) {
+        return try await authenticated(token: token, build: build, region: region, titleID: titleID) {
             if recordsDiagnostics { diagnosticStage = .friendsQuery }
             if protocolVersion == .legacySubscription {
                 // Connection-scoped listener object 1. The initial subscription

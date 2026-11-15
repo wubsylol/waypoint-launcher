@@ -415,3 +415,23 @@ target owner rejection, target refusal stage and production-like cancellation.
 Independent review's cancellation-classification finding was fixed before live
 testing: task cancellation is checked before mapping a cancelled network read
 to an authentication failure. Live outcome recorded separately.
+
+## Application-authenticated friends control (version 0.0.16)
+
+After owner-verified App authentication succeeded in version15, this mode adds
+raw v2 GetFriends method5 with the owner-verified App logon callback client ID.
+It requests a fresh temporary credential each run, closes the WoW source before
+App login, verifies the target owner and requires a valid authenticated context
+before sending the social read. Missing context stops without a social request;
+there is no CIID/legacy/flag fallback. Returned context headers must match.
+
+This is one bounded lookup attempt: existing limits remain20 pages/1000 records
+and35 seconds per native connection. Refusal stops immediately. No session
+lifecycle, subscription, message, friendship/presence change or persistent write
+is added. Diagnostic UI displays only count, never friend names or IDs. A
+successful empty response would establish RPC acceptance, not expected nonempty
+list correctness, real-time updates or chat support.
+
+42 native/probe checks pass, including new exact App title/fresh-token/context
+wire assertions, missing-context stop and refusal-stage checks. Independent
+review found no blockers. Live result recorded separately.

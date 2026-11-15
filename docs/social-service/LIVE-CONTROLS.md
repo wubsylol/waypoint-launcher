@@ -83,3 +83,15 @@ completed version-14 window was subsequently observed showing the same result.
 This confirms issuance/owner validation for the requested App title, not actual
 target scope, application authentication, session lifecycle or friends access.
 No target logon, friends call or explicit session lifecycle RPC was sent.
+
+## Application authentication — version 0.0.15 (2026-11-15)
+
+After successful issuance, the authentication-only control requested a fresh
+credential, closed the WoW source connection and performed only Connect/Logon
+as App with Mc64 and the current public bna build. The user reported successful
+owner-verified application authentication with both connections closed; the
+completed version-15 window was subsequently observed showing the same result.
+
+This establishes acceptance of this App authentication control, not friends
+permission or explicit application-session lifecycle. No friends request,
+subscription or explicit Create/Restore/DestroySession was sent in version15.
