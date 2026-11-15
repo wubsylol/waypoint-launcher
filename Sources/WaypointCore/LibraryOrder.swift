@@ -47,3 +47,16 @@ public enum LibraryOrder {
         return ids
     }
 }
+
+/// Only the installed prefix is a drag source or insertion destination.
+public enum LibraryDragRules {
+    public static func canStart(rows: IndexSet, installedCount: Int) -> Bool {
+        guard rows.count == 1, let row = rows.first else { return false }
+        return row >= 0 && row < installedCount
+    }
+    public static func insertionRow(proposed: Int, onRow: Bool, installedCount: Int) -> Int? {
+        guard installedCount > 0, proposed >= 0, proposed <= installedCount,
+              !(onRow && proposed == installedCount) else { return nil }
+        return proposed
+    }
+}

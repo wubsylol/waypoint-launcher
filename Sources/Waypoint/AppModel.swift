@@ -414,6 +414,8 @@ final class AppModel {
     /// Drops the game with uid `uid` before the one with `target`, or last
     /// with nil, and remembers the order.
     func moveGame(_ uid: String, before target: String?) {
+        let installed = games.filter { canReorder($0) }.map(\.install.uid)
+        guard installed.contains(uid), target.map({ installed.contains($0) }) ?? true else { return }
         libraryOrder = LibraryOrder.moving(uid, before: target, in: games.filter { canReorder($0) }.map(\.install.uid), remembered: libraryOrder)
         games = LibraryOrder.sorted(games.filter { canReorder($0) }, by: libraryOrder, id: \.install.uid)
             + games.filter { !canReorder($0) }

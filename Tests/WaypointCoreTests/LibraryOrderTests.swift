@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import WaypointCore
 
@@ -35,4 +36,29 @@ import Testing
     struct Game { let id, uid: String }
     let games = [Game(id: "wow", uid: "wow"), Game(id: "heroes@windows", uid: "heroes")]
     #expect(LibraryOrder.sorted(games, by: ["heroes", "wow"], id: \.uid).map(\.id) == ["heroes@windows", "wow"])
+}
+
+@Test func onlyInstalledRowsCanStartDragging() {
+    #expect(LibraryDragRules.canStart(rows: IndexSet(integer: 0), installedCount: 2))
+    #expect(LibraryDragRules.canStart(rows: IndexSet(integer: 1), installedCount: 2))
+    // Header, available title, pending install and foreign indexes are outside the prefix.
+    for row in [2, 3, 20] {
+        #expect(!LibraryDragRules.canStart(rows: IndexSet(integer: row), installedCount: 2))
+    }
+    #expect(!LibraryDragRules.canStart(rows: IndexSet(), installedCount: 2))
+    #expect(!LibraryDragRules.canStart(rows: IndexSet(integersIn: 0..<2), installedCount: 2))
+    #expect(!LibraryDragRules.canStart(rows: IndexSet(integer: 0), installedCount: 0))
+}
+
+@Test func availableSectionNeverBecomesADropDestination() {
+    for row in [0, 1, 2] {
+        #expect(LibraryDragRules.insertionRow(proposed: row, onRow: false, installedCount: 2) == row)
+    }
+    // A gap before the header is allowed; dropping onto the header/list is not.
+    #expect(LibraryDragRules.insertionRow(proposed: 2, onRow: true, installedCount: 2) == nil)
+    for row in [-1, 3, 30] {
+        #expect(LibraryDragRules.insertionRow(proposed: row, onRow: false, installedCount: 2) == nil)
+        #expect(LibraryDragRules.insertionRow(proposed: row, onRow: true, installedCount: 2) == nil)
+    }
+    #expect(LibraryDragRules.insertionRow(proposed: 0, onRow: false, installedCount: 0) == nil)
 }
