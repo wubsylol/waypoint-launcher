@@ -657,7 +657,8 @@ private func presencePage(friend: UInt64, title: UInt64 = 0x576f57) -> Data {
         #expect(try BGSWire.uint(key, 1) == expected.0)
         #expect(try BGSWire.uint(key, 2) == expected.1)
         #expect(try BGSWire.uint(key, 3) == expected.2)
-        #expect(key.count == 3) // No unique/account identifiers in key metadata.
+        #expect(try BGSWire.uint(key, 4) == 0)
+        #expect(key.count == 4) // Explicit zero is not a guessed private identifier.
     }
 }
 
@@ -725,4 +726,23 @@ private func presencePage(friend: UInt64, title: UInt64 = 0x576f57) -> Data {
     catch is CancellationError { #expect(source.cancelled && target.cancelled) }
     catch { Issue.record("Cancelled query mislabeled") }
     #expect(target.written.count == 4)
+}
+
+@Test func presenceExplicitZeroControlChangesOnlyKeyMemberPresence() throws {
+    var original = BGSWire.number(1, 42) + BGSWire.number(2, 2)
+    for (title, group, field) in PresenceDiagnosticPage.keys {
+        original += BGSWire.bytes(3, BGSWire.number(1, title) + BGSWire.number(2, group) + BGSWire.number(3, field))
+    }
+    let before = try BGSWire.decode(original)
+    let after = try BGSWire.decode(PresenceDiagnosticPage.request(friendID: 42))
+    #expect(before[1] == after[1] && before[2] == after[2])
+    let previousKeys = try #require(before[3]), currentKeys = try #require(after[3])
+    #expect(previousKeys.count == currentKeys.count)
+    for (previous, current) in zip(previousKeys, currentKeys) {
+        guard case .bytes(let oldData) = previous, case .bytes(let newData) = current else { Issue.record("Nonmessage key"); return }
+        let old = try BGSWire.decode(oldData), new = try BGSWire.decode(newData)
+        for field in 1...3 { #expect(old[field] == new[field]) }
+        #expect(old[4] == nil && new.count == old.count + 1)
+        #expect(try BGSWire.uint(new, 4) == 0)
+    }
 }

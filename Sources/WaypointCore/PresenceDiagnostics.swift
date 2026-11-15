@@ -22,7 +22,8 @@ enum PresenceDiagnosticPage {
     static func request(friendID: UInt64) -> Data {
         var body = BGSWire.number(1, friendID) + BGSWire.number(2, 2) // INCLUDE_ALL_GAME_ACCOUNTS
         for (title, group, field) in keys {
-            body += BGSWire.bytes(3, BGSWire.number(1, title) + BGSWire.number(2, group) + BGSWire.number(3, field))
+            body += BGSWire.bytes(3, BGSWire.number(1, title) + BGSWire.number(2, group)
+                + BGSWire.number(3, field) + BGSWire.number(4, 0))
         }
         return body
     }

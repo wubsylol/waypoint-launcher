@@ -59,3 +59,18 @@ strict signature verification pass. Live result remains untested.
 Variant labels report which declared schema fields were present, not validated
 status semantics or an assertion about exact wire encoding. Private values are
 not interpreted or displayed by this diagnostic.
+
+## Explicit-zero key control2
+
+Initial live query was refused7 after successful App login and friends lookup.
+Control2 adds unique_id4=0 on every existing key and changes no query scope,
+account ID, key title/group/field, service/method, context source or authentication.
+Generated schema confirms the optional member/default0. Public client update
+examples show explicit zero, but do not establish that Query requires it:
+https://us.forums.blizzard.com/en/d4/t/main-thread-pc-game-client-freezes-at-logging-into-diablo-iv-when-launched-on-certain-nvme-drives/23732?page=14
+
+This is a presence-of-member hypothesis control, not a demonstrated fix. No
+since_us, session setup or alternative endpoint is added.49 targeted checks
+pass, including an old/new request parity fixture. Status7 remains compatible
+with multiple causes; do not infer permission denial, offline state or a need
+for a new session from it. Live outcome pending.

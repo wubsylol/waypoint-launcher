@@ -13,12 +13,12 @@ import WaypointCore
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 500),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Presence — Schema Check 1"
+        window.title = "Waypoint Presence — Explicit-zero Key Check 2"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        let title = NSTextField(labelWithString: "Presence and game/activity — bounded schema check")
+        let title = NSTextField(labelWithString: "Presence fields — explicit-zero key control")
         title.font = .systemFont(ofSize: 18, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Close Blizzard games on both Macs first. Uses temporary application authentication, reads friend IDs without names, then queries a fixed presence-field allowlist for at most three friends. No subscriptions, presence updates, messages or explicit session lifecycle calls. Displays only declared field kinds and recognised game titles, never friend IDs, names or activity text. Status-field meanings remain unverified; missing data will not be labelled Offline.")
+        let explanation = NSTextField(wrappingLabelWithString: "Close Blizzard games on both Macs first. Uses temporary application authentication, reads friend IDs without names, then queries the same fixed fields for at most three friends, with unique_id explicitly set to zero. No subscriptions, presence updates, messages or explicit session lifecycle calls. Displays only declared field kinds and recognised game titles, never friend IDs, names or activity text. Status-field meanings remain unverified; missing data will not be labelled Offline.")
         button = NSButton(title: "Check presence fields", target: self, action: #selector(check))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel))
         let actions = NSStackView(views: [button, cancel, NSView()])

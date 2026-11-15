@@ -147,3 +147,19 @@ connection closure, owner-verified App authentication, authenticated callback
 client context, raw GetFriends5 with options.fetch_names enabled on every page,
 bounded parsing, local opt-in BattleTag display, and connection closure. No
 explicit session lifecycle or social mutation was needed for this snapshot.
+
+## Presence schema check1 (2026-11-15)
+
+User reported: application login and friends lookup succeeded; presence query
+returned7. No presence fields, status values or game/activity conclusions were
+returned. No automatic retry/fallback was performed. Saved login data unchanged.
+The request was the v2 Query5 control with INCLUDE_ALL_GAME_ACCOUNTS, four fixed
+candidate keys and the owner-verified authenticated App client context.
+
+Follow-up inspection: modern presence Query declares INSTANCE_ID routing, unlike
+friends' BATTLE_NET_ACCOUNT routing. This may matter for app-session setup, but
+does not establish that creation is required or justify inventing a client ID.
+The key schema also defines optional unique_id4. The first probe omitted it;
+public client update examples include explicit zero. The next isolated control
+adds only unique_id=0 to the same keys, keeping other request fields and auth
+unchanged. No claim is made that optional protobuf presence is server-required.
