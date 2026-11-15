@@ -207,9 +207,16 @@ final class AppModel {
         defer { isRefreshingExperimentalFriends = false }
         guard activeAccount?.id == accountID else { throw FriendsPanelFailure.accountChanged }
         func hasConflictingClient() -> Bool {
-            RunningProcesses.executables().contains {
+            let processes = RunningProcesses.executables()
+            if processes.contains(where: {
                 let name = URL(fileURLWithPath: $0.path).lastPathComponent
                 return ["World of Warcraft", "Hearthstone", "Heroes of the Storm", "StarCraft", "Diablo", "Overwatch", "Warcraft III", "Battle.net"].contains { name.hasPrefix($0) }
+            }) { return true }
+            // Wine exposes its loader name, not the game executable's basename.
+            return discoveredGames.contains { game in
+                guard game.install.platform == .windows, let title = WindowsTitle.forInstall(game.install) else { return false }
+                return !WineProcesses.gameAndLaunchers(in: URL(fileURLWithPath: game.install.installPath),
+                    title: title, processes: processes).isEmpty
             }
         }
         guard !hasConflictingClient() else { throw FriendsPanelFailure.gamesRunning }

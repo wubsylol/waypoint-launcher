@@ -1,7 +1,7 @@
 import AppKit
 import WaypointCore
 
-/// Experimental, manually refreshed social snapshot. No message actions or disk cache.
+/// Experimental social snapshot refreshed on opening or explicit refresh. No messages or disk cache.
 @MainActor
 final class FriendsViewController: NSViewController, NSSearchFieldDelegate {
     #if DEBUG
@@ -87,17 +87,27 @@ final class FriendsViewController: NSViewController, NSSearchFieldDelegate {
         render()
     }
 
+    /// Invoked only when the pop-out becomes open, not on every focus change.
+    func refreshWhenOpened() {
+        _ = view
+        guard !isDemo, task == nil, !model.isSigningIn,
+              !model.isPreparingToQuit, !model.experimentalFriendsCleanupUnconfirmed else { return }
+        refreshFriends()
+    }
+
     @objc private func refreshFriends() {
         guard !isDemo, task == nil, let active = model.activeAccount else { return }
         owner = active.id
         refresh.isEnabled = false; spinner.startAnimation(nil)
         // Retain existing rows as an explicitly dated snapshot during refresh.
         notice.stringValue = "Refreshing… Close Blizzard games on all devices."
+        notice.isHidden = false
         task = Task { [weak self] in
             guard let self else { return }
             defer {
                 self.task = nil; self.spinner.stopAnimation(nil)
-                self.refresh.isEnabled = self.model.activeAccount != nil && !self.model.experimentalFriendsCleanupUnconfirmed
+                self.refresh.isEnabled = self.model.activeAccount != nil && !self.model.isSigningIn && !self.model.experimentalFriendsCleanupUnconfirmed
+                self.render()
             }
             do {
                 let report = try await self.model.experimentalFriendsSnapshot(accountID: active.id)
@@ -141,7 +151,7 @@ final class FriendsViewController: NSViewController, NSSearchFieldDelegate {
             let time = lastRefresh.formatted(date: .omitted, time: .shortened)
             let onlineCount = rows.filter { $0.status != "Offline" && $0.status != "Status unavailable" }.count
             summary.stringValue = "\(onlineCount) online · Updated \(time)\(snapshotComplete ? "" : " · Partial list")"
-        } else { summary.stringValue = "Manual refresh · Nothing saved on this Mac" }
+        } else { summary.stringValue = "Refreshes on opening · Nothing saved on this Mac" }
         if rows.isEmpty {
             addEmpty(model.activeAccount == nil ? "Sign in to see your friends" : (lastRefresh == nil ? "Your friends, alongside your games" : "No friends returned"),
                 detail: lastRefresh == nil ? "Refresh to load a private snapshot of statuses and games. Close Blizzard games before refreshing." : "Try refreshing again later.")

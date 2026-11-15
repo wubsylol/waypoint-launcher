@@ -149,10 +149,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             window.setFrameAutosaveName("FriendsExperiment")
             friendsWindow = window
         }
+        let opening = !window.isVisible || window.isMiniaturized || NSApp.isHidden
         backgroundServices.setFriendsOpen(true)
         if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        if opening { (window.contentViewController as? FriendsViewController)?.refreshWhenOpened() }
     }
 
     @objc func showSettings(_ sender: Any?) {

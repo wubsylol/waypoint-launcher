@@ -6,11 +6,14 @@ Based on personal mainline 748e79f plus the separately saved social experiment.
 The Friends toolbar button beside Account opens one reusable AppKit window.
 The library does not change size. The window has search, online/away/busy rows,
 game/activity subtitles, a collapsible offline group, a separate unavailable
-status group, and manual refresh with an explicit snapshot time/partial label.
+status group, and refresh on opening, plus a refresh button and explicit snapshot time/partial label.
 Monograms and status dots are local drawing, not guessed Blizzard friend avatars.
 Unknown public game codes remain marked as other titles. No messaging controls.
 
-Opening the window makes no social request. Refresh explicitly uses the saved
+Opening/reopening the window refreshes automatically when no request or other
+sign-in is active. Raising an already-visible window does not repeat the refresh.
+Demo mode, quit preparation and unconfirmed-cleanup lock suppress automatic
+refresh. All refreshes use the saved
 Americas WoW login to obtain a temporary owner-verified App credential, then the
 verified App session lifecycle and fresh friends/presence query. No replacement
 login, typing/read receipt, message, presence publication or subscription is sent.
@@ -72,3 +75,17 @@ friends; WoW plus desktop/mobile handles displays only WoW; backgrounds and
 right-side game icons render correctly using cached Hearthstone/WoW/Diablo IV
 artwork. App-only rows have no game artwork or repeated status text. Demo exited
 before replacing the experimental output app; real friend data was not captured.
+
+Refresh-on-open refinement: first open, reopen after closing, deminiaturize, or
+show while the app was hidden requests a refresh through the same guarded path.
+Repeated toolbar clicks while visible do not duplicate it. No focus observer,
+polling timer, queued retry or background refresh is introduced. Game-running
+checks still occur before Keychain access and before native connection creation.
+The existing dated snapshot stays visible during refresh or normal failure.
+
+The refresh-on-open source change is saved for offline review only. It has not
+been live-tested, packaged or deployed after the user's account-safety concern.
+The current friends.2 test build remains manual-refresh. Local conflict checks
+also use the existing Wine matcher for known installed Windows titles; this does
+not detect games on other machines or establish cross-client coexistence. No
+claim of Blizzard authorization or account safety follows from functional tests.
