@@ -186,3 +186,17 @@ sent. This extends the earlier WoW-authenticated session-state refusals to the
 working App identity; it does not prove absence of a session or that explicit
 creation will resolve presence. Stop field-argument variations here and seek
 SDK lifecycle/routing evidence before another live attempt.
+
+## App handle check4 (2026-11-15)
+
+User reported successful owner-verified App authentication, one Americas App
+handle, and authenticated callback context present. No request followed App
+login. This establishes availability of the classified own-login metadata, not
+session creation rights, routing equivalence or cleanup/coexistence behavior.
+
+A separate single-attempt lifecycle test is now prepared but NOT RUN. It binds
+to the App handle from that login, verifies response/callback owner/binding,
+and requests same-context destruction, with explicit unconfirmed-cleanup states.
+See tools/session-lifecycle-probe/README.md. Explicit risk consent and closed
+clients on both Macs are required before running it. The working friends
+viewer and mainline launcher remain separate and unchanged.

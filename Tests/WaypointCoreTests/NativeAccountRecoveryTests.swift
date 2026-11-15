@@ -807,3 +807,166 @@ private func presencePage(friend: UInt64, title: UInt64 = 0x576f57) -> Data {
     #expect(source.cancelled && target.cancelled)
     #expect(source.written.count == 3 && target.written.count == 2)
 }
+
+private func appLifecycleRecord() -> Data {
+    BGSWire.number(1, 123) + BGSWire.bytes(2,
+        BGSWire.number(1, 456) + BGSWire.number(2, 0x417070) + BGSWire.number(3, 1))
+}
+private func appLifecycleIdentity(owner: UInt64 = 123, handleID: UInt64 = 456, region: UInt64 = 1,
+                                  instance: String = "synthetic-app-instance") -> Data {
+    BGSWire.number(1, owner) + BGSWire.bytes(2,
+        BGSWire.number(1, handleID) + BGSWire.number(2, 0x417070) + BGSWire.number(3, 1))
+        + BGSWire.text(3, instance) + BGSWire.number(4, region)
+}
+private func appLifecycleAuthReplies() -> [Data] {
+    [accountFrame(token: 0), accountFrame(token: 1), accountFrame(token: 99,
+        body: BGSWire.bytes(2, appLifecycleRecord()), service: 0, method: 1,
+        hash: 0x9da8116b, clientID: "synthetic-app-context")]
+}
+private func appLifecycleNotification(_ method: UInt64, identity: Data = appLifecycleIdentity(), context: String = "synthetic-app-context") -> Data {
+    accountFrame(token: 99, body: BGSWire.bytes(3, identity), service: 0, method: method,
+        hash: 0xbca72135, clientID: context)
+}
+
+@Test func appLifecycleValidatesReplyAndCallbackInEitherOrder() throws {
+    for callbackFirst in [true, false] {
+        let model = try ApplicationSessionLifecycle(owner: 123, record: BGSWire.decode(appLifecycleRecord()),
+            context: Data("synthetic-app-context".utf8))
+        model.markSubmitted()
+        let response = BGSWire.bytes(1, appLifecycleIdentity())
+        let callback = BGSWire.bytes(3, appLifecycleIdentity())
+        if callbackFirst { try model.notification(method: 1, headerContext: nil, data: callback) }
+        try model.acceptCreationResponse(response)
+        if !callbackFirst { try model.notification(method: 1, headerContext: nil, data: callback) }
+        #expect(model.confirmed && model.canDestroy)
+        #expect(model.report.instanceMatchesAuthenticationContext == false)
+        try model.markDestroySubmitted()
+        try model.acceptDestroyResponse()
+        #expect(model.report.destroyRequestAccepted)
+        #expect(!model.canDestroy)
+    }
+}
+
+@Test func appLifecycleRejectsForeignOrAmbiguousIdentitiesBeforeCleanup() throws {
+    for identity in [appLifecycleIdentity(owner: 999), appLifecycleIdentity(handleID: 789),
+                     appLifecycleIdentity(region: 2), appLifecycleIdentity(instance: "bad\ninstance")] {
+        let model = try ApplicationSessionLifecycle(owner: 123, record: BGSWire.decode(appLifecycleRecord()), context: Data("context".utf8))
+        model.markSubmitted()
+        #expect(throws: (any Error).self) { try model.acceptCreationResponse(BGSWire.bytes(1, identity)) }
+        #expect(!model.canDestroy)
+    }
+    let model = try ApplicationSessionLifecycle(owner: 123, record: BGSWire.decode(appLifecycleRecord()), context: Data("context".utf8))
+    model.markSubmitted()
+    try model.acceptCreationResponse(BGSWire.bytes(1, appLifecycleIdentity()))
+    #expect(throws: (any Error).self) {
+        try model.notification(method: 1, headerContext: Data("foreign".utf8), data: BGSWire.bytes(3, appLifecycleIdentity()))
+    }
+    #expect(!model.canDestroy)
+    let mismatch = try ApplicationSessionLifecycle(owner: 123, record: BGSWire.decode(appLifecycleRecord()), context: Data("context".utf8))
+    mismatch.markSubmitted()
+    try mismatch.acceptCreationResponse(BGSWire.bytes(1, appLifecycleIdentity()))
+    #expect(throws: (any Error).self) {
+        try mismatch.notification(method: 1, headerContext: nil,
+            data: BGSWire.bytes(3, appLifecycleIdentity(instance: "different-synthetic-instance")))
+    }
+    #expect(!mismatch.canDestroy)
+}
+
+@Test @MainActor func appLifecycleDispatchesOnlyCreateAndDestroyWithOwnAppHandleAndContext() async throws {
+    for callbackFirst in [true, false] {
+        let source = AccountTestTransport(applicationIssuanceReplies())
+        let response = accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity()))
+        let created = appLifecycleNotification(1)
+        let target = AccountTestTransport((appLifecycleAuthReplies() + (callbackFirst ? [created,response] : [response,created])
+            + [appLifecycleNotification(2), accountFrame(token: 3)]).reduce(Data(), +))
+        let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        #expect(report.creationResponseVerified && report.creationCallbackVerified && report.destroyRequestAccepted && report.destructionCallbackVerified)
+        #expect(source.cancelled && target.cancelled)
+        #expect(source.written.count == 3 && target.written.count == 4)
+        for (index, packet) in target.written.dropFirst(2).enumerated() {
+            let length = Int(packet[0]) * 256 + Int(packet[1])
+            let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+            #expect(try BGSWire.uint(header, 11) == 0x7b37d770)
+            #expect(try BGSWire.uint(header, 2) == (index == 0 ? 1 : 3))
+            #expect(try BGSWire.data(header, 13) == Data("synthetic-app-context".utf8))
+            let data = Data(packet.dropFirst(2 + length))
+            if index == 0 {
+                let body = try BGSWire.decode(data), handle = try BGSWire.decode(BGSWire.data(body, 1))
+                #expect(body.count == 1 && handle.count == 3)
+                #expect(try BGSWire.uint(handle, 1) == 456)
+                #expect(try BGSWire.uint(handle, 2) == 0x417070)
+                #expect(try BGSWire.uint(handle, 3) == 1)
+            } else { #expect(data.isEmpty) }
+        }
+    }
+}
+
+@Test @MainActor func appLifecycleDoesNotCreateWithoutExplicitAppHandle() async {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport(Array(authenticatedContextReplies().prefix(3)).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Missing App handle reached creation")
+    } catch { #expect(target.written.count == 2); #expect(source.cancelled && target.cancelled) }
+}
+
+@Test @MainActor func appLifecycleRefusedCreationDoesNotDestroyOrRetry() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let h = BGSWire.number(1, 254) + BGSWire.number(3, 2) + BGSWire.number(5, 0) + BGSWire.number(6, 7)
+    let target = AccountTestTransport(appLifecycleAuthReplies().reduce(Data(), +) + Data([UInt8(h.count >> 8), UInt8(h.count & 255)]) + h)
+    let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(report.refusalCode == 7 && !report.creationResponseVerified && !report.destroyRequestAccepted)
+    #expect(target.written.count == 3 && target.cancelled)
+}
+
+@Test @MainActor func appLifecycleInvalidCreatedOwnerDoesNotSendDestruction() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport((appLifecycleAuthReplies() + [accountFrame(token: 2,
+        body: BGSWire.bytes(1, appLifecycleIdentity(owner: 999)))]).reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(!report.creationResponseVerified && !report.destroyRequestAccepted)
+    #expect(report.outcome.contains("unconfirmed"))
+    #expect(target.written.count == 3 && target.cancelled)
+}
+
+@Test @MainActor func appLifecycleInterruptedAfterCreationReportsCleanupUnknownWithoutReconnecting() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport((appLifecycleAuthReplies() + [accountFrame(token: 2,
+        body: BGSWire.bytes(1, appLifecycleIdentity()))]).reduce(Data(), +), stall: true)
+    target.cancellationReturnsUnavailable = true
+    let task = Task {
+        try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    }
+    while target.pending == nil { await Task.yield() }
+    task.cancel()
+    let report = try await task.value
+    #expect(report.creationResponseVerified && !report.destroyRequestAccepted)
+    #expect(report.outcome.contains("unconfirmed"))
+    #expect(source.cancelled && target.cancelled && target.written.count == 3)
+}
+
+@Test @MainActor func appLifecycleExternalIdentityFailuresNeverTriggerDestruction() async throws {
+    let body = BGSWire.bytes(3, appLifecycleIdentity())
+    let malformedHeader = BGSWire.number(1, 0) + BGSWire.number(2, 1) + BGSWire.number(3, 99)
+        + BGSWire.number(5, UInt64(body.count)) + BGSWire.fixed32(11, 0xbca72135) + BGSWire.number(13, 123)
+    let malformedContext = Data([UInt8(malformedHeader.count >> 8), UInt8(malformedHeader.count & 255)]) + malformedHeader + body
+    let foreignAuth = accountFrame(token: 99, body: BGSWire.bytes(2, BGSWire.number(1, 999)),
+        service: 0, method: 1, hash: 0x9da8116b, clientID: "foreign-context")
+    let changedContextAuth = accountFrame(token: 99, body: BGSWire.bytes(2, appLifecycleRecord()),
+        service: 0, method: 1, hash: 0x9da8116b, clientID: "changed-context")
+    for event in [malformedContext, foreignAuth, changedContextAuth] {
+        let source = AccountTestTransport(applicationIssuanceReplies())
+        let target = AccountTestTransport((appLifecycleAuthReplies() + [accountFrame(token: 2,
+            body: BGSWire.bytes(1, appLifecycleIdentity())), event]).reduce(Data(), +))
+        let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        #expect(report.creationResponseVerified && !report.destroyRequestAccepted)
+        #expect(report.outcome.contains("unconfirmed"))
+        #expect(target.written.count == 3 && source.cancelled && target.cancelled)
+    }
+}

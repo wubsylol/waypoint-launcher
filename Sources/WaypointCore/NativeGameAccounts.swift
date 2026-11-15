@@ -17,11 +17,14 @@ public final class NativeGameAccounts {
             }
         }
     }
-    private enum ReplyKind { case native, friends, sessionDiagnostic, applicationCredential, presenceQuery }
+    private enum ReplyKind { case native, friends, sessionDiagnostic, applicationCredential, presenceQuery, sessionLifecycle }
     private typealias W = BGSWire
     private var recordsDiagnostics = false
     private var inspectsApplicationHandle = false
     private var applicationHandleState: ApplicationHandleState = .missing
+    private var applicationLogonRecord: W.Message?
+    private var capturesApplicationHandle = false
+    private var sessionLifecycle: ApplicationSessionLifecycle?
     private var inspectsAuthenticationContext = false
     private var usesAuthenticatedClientID = false
     private var authenticationReplyHasClientID = false
@@ -261,6 +264,59 @@ public final class NativeGameAccounts {
         }
     }
 
+    /// Consequential opt-in experiment. Never called by the launcher/probes that
+    /// only read data. Requires explicit live-test approval and closed clients.
+    public func applicationSessionLifecycleTest(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws -> ApplicationSessionTestReport {
+        try await applicationSessionLifecycleTest(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts())
+    }
+
+    func applicationSessionLifecycleTest(token: LoginToken, build: UInt64, applicationBuild: UInt64,
+                                        region: Region, applicationClient: NativeGameAccounts) async throws -> ApplicationSessionTestReport {
+        guard applicationBuild > 0 else { throw ApplicationSessionTestFailure.unavailable }
+        let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
+        try Task.checkCancellation()
+        applicationClient.inspectsAuthenticationContext = true
+        applicationClient.usesAuthenticatedClientID = true
+        applicationClient.inspectsApplicationHandle = true
+        applicationClient.capturesApplicationHandle = true
+        return try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+            titleID: 0x417070) {
+            guard let record = applicationClient.applicationLogonRecord,
+                  let context = applicationClient.logonNotificationClientID else { throw ApplicationSessionTestFailure.unavailable }
+            let lifecycle = try ApplicationSessionLifecycle(owner: applicationClient.expectedOwner, record: record, context: context)
+            applicationClient.sessionLifecycle = lifecycle
+            defer { applicationClient.sessionLifecycle = nil; applicationClient.applicationLogonRecord = nil; applicationClient.capturesApplicationHandle = false }
+            do {
+                try Task.checkCancellation()
+                lifecycle.markSubmitted()
+                let response = try await applicationClient.call(hash: 0x7b37d770, method: 1,
+                    body: lifecycle.request, replyKind: .sessionLifecycle)
+                try lifecycle.acceptCreationResponse(response)
+                while !lifecycle.confirmed {
+                    let (header, body) = try await applicationClient.receive()
+                    try applicationClient.notification(header, body)
+                }
+                guard !lifecycle.report.destructionCallbackVerified else { throw ApplicationSessionTestFailure.unavailable }
+                try lifecycle.markDestroySubmitted()
+                _ = try await applicationClient.call(hash: 0x7b37d770, method: 3, replyKind: .sessionLifecycle)
+                try lifecycle.acceptDestroyResponse()
+            } catch {
+                lifecycle.recordFailure(error)
+                // Cleanup only a validated creation in this same still-open context.
+                // Cancellation/deadline/identity conflicts never trigger a new connection.
+                if lifecycle.canDestroy && !applicationClient.closed && !Task.isCancelled {
+                    do {
+                        try lifecycle.markDestroySubmitted()
+                        _ = try await applicationClient.call(hash: 0x7b37d770, method: 3, replyKind: .sessionLifecycle)
+                        try lifecycle.acceptDestroyResponse()
+                    } catch { lifecycle.recordFailure(error) }
+                }
+            }
+            return lifecycle.report
+        }
+    }
+
     public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
         try await authenticated(token: token, build: build, region: region) {
             let owner = expectedOwner
@@ -445,8 +501,12 @@ public final class NativeGameAccounts {
     }
     private func call(hash: UInt32, method: UInt64, body: Data = Data(), replyKind: ReplyKind = .native) async throws -> Data {
         let token = sequence; sequence += 1
+        if replyKind == .sessionLifecycle {
+            guard let lifecycle = sessionLifecycle else { throw ApplicationSessionTestFailure.identity }
+            try lifecycle.validateContext(logonNotificationClientID)
+        }
         var clientID: String?
-        if (replyKind == .friends || replyKind == .sessionDiagnostic || replyKind == .presenceQuery), usesAuthenticatedClientID {
+        if (replyKind == .friends || replyKind == .sessionDiagnostic || replyKind == .presenceQuery || replyKind == .sessionLifecycle), usesAuthenticatedClientID {
             guard loggedIn, let rawIdentity = logonNotificationClientID,
                   let identity = String(data: rawIdentity, encoding: .utf8),
                   !identity.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
@@ -463,7 +523,7 @@ public final class NativeGameAccounts {
             let (header, response) = try await receive()
             if try W.uint(header, 1) == 254 {
                 guard try W.uint(header, 3) == token else { throw Failure.unavailable }
-                if (replyKind == .friends || replyKind == .sessionDiagnostic || replyKind == .presenceQuery), usesAuthenticatedClientID, header[13] != nil {
+                if (replyKind == .friends || replyKind == .sessionDiagnostic || replyKind == .presenceQuery || replyKind == .sessionLifecycle), usesAuthenticatedClientID, header[13] != nil {
                     guard boundedHeaderClientID(header) == logonNotificationClientID else { throw Failure.owner }
                 }
                 let status = try W.uint(header, 6, default: 0)
@@ -474,6 +534,7 @@ public final class NativeGameAccounts {
                     case .native: throw Failure.rejected(status)
                     case .applicationCredential: throw ApplicationCredentialFailure.refused(status)
                     case .presenceQuery: throw PresenceQueryFailure.refused(status)
+                    case .sessionLifecycle: throw ApplicationSessionTestFailure.refused(status)
                     }
                 }
                 if inspectsAuthenticationContext, hash == 0xc02f8216, method == 1 {
@@ -487,17 +548,29 @@ public final class NativeGameAccounts {
     }
     private func notification(_ header: W.Message, _ body: Data) throws {
         let hash = try W.uint(header, 11), method = try W.uint(header, 2) & 0x3fff_ffff
+        if hash == 0xbca72135, let lifecycle = sessionLifecycle {
+            let context = header[13] == nil ? nil : boundedHeaderClientID(header)
+            guard header[13] == nil || context != nil else { throw ApplicationSessionTestFailure.identity }
+            try lifecycle.notification(method: method, headerContext: context, data: body)
+            return
+        }
         guard hash == 0x9da8116b || hash == 0xecb8b826 else {
             if recordsDiagnostics { throw SessionDiagnosticFailure.unexpectedCallback(diagnosticStage, service: hash, method: method) }
             throw Failure.unavailable
         }
         switch method {
         case 1:
+            if hash == 0x9da8116b, sessionLifecycle != nil { throw ApplicationSessionTestFailure.identity }
             let message = try W.decode(body), status = try W.uint(message, 1, default: 0)
             guard status == 0 else { throw Failure.rejected(status) }
             let record = try W.decode(W.data(message, 2))
             guard try W.uint(record, 1) == expectedOwner else { throw Failure.owner }
-            if inspectsApplicationHandle { applicationHandleState = ApplicationHandleMetadata.classify(record) }
+            if inspectsApplicationHandle {
+                applicationHandleState = ApplicationHandleMetadata.classify(record)
+                if capturesApplicationHandle && applicationHandleState == .matching {
+                    applicationLogonRecord = [2: record[2] ?? []]
+                }
+            }
             if recordsDiagnostics {
                 // Desktop schema names are only hypotheses for this game reply.
                 // Observe optional metadata instead of enforcing its wire type.
