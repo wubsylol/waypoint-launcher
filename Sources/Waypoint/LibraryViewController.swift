@@ -102,6 +102,8 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
+        // macOS 15 added display-mode customization independently of item customization.
+        if #available(macOS 15.0, *) { toolbar.allowsDisplayModeCustomization = false }
         return toolbar
     }()
 

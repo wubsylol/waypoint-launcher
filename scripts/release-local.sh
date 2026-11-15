@@ -2,9 +2,9 @@
 # Reproducible, local-only fork release. No publishing, account export or notarization.
 set -euo pipefail
 repo="${0:A:h:h}"
-label="1.2.14-wubs.1"
-version="1.2.14"
-build_number="24"
+label="1.2.15-wubs.1"
+version="1.2.15"
+build_number="25"
 destination="${DESTINATION:-$repo/dist/local/$label}"
 if [[ -n "$(git -C "$repo" status --porcelain)" ]]; then
     print -u2 "Commit source changes before building a release."
