@@ -11,7 +11,8 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
     let supportsSystemIntegration = Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil
     private(set) var loginStatus: SMAppService.Status = .notRegistered
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
-    private(set) var errorMessage: String?
+    private(set) var loginError: String?
+    private(set) var notificationsError: String?
     @ObservationIgnored var openLibrary: (() -> Void)?
     @ObservationIgnored var openAppUpdate: (() -> Void)?
     @ObservationIgnored private var announceAppUpdate: (() -> Void)?
@@ -102,17 +103,17 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
 
     func setLoginEnabled(_ enabled: Bool) async {
         guard supportsSystemIntegration else { return }
-        errorMessage = nil
+        loginError = nil
         do {
             if enabled { try SMAppService.mainApp.register() }
             else { try await SMAppService.mainApp.unregister() }
-        } catch { errorMessage = "Could not change Start at login: \(error.localizedDescription)" }
+        } catch { loginError = "Could not change Start at login: \(error.localizedDescription)" }
         refreshStatus()
     }
 
     func setNotificationsEnabled(_ enabled: Bool) async {
         guard supportsSystemIntegration else { return }
-        errorMessage = nil
+        notificationsError = nil
         if enabled {
             do {
                 let center = UNUserNotificationCenter.current()
@@ -120,11 +121,11 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
                 UserDefaults.standard.set(granted, forKey: UpdatePreferences.notificationsKey)
                 syncNotifications()
                 if granted { announceAppUpdate?() }
-                else { errorMessage = "Allow Waypoint notifications in System Settings to receive update alerts." }
+                else { notificationsError = "Allow Waypoint notifications in System Settings to receive update alerts." }
             } catch {
                 UserDefaults.standard.set(false, forKey: UpdatePreferences.notificationsKey)
                 syncNotifications()
-                errorMessage = "Could not enable notifications: \(error.localizedDescription)"
+                notificationsError = "Could not enable notifications: \(error.localizedDescription)"
             }
         } else {
             UserDefaults.standard.set(false, forKey: UpdatePreferences.notificationsKey)

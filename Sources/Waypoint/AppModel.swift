@@ -388,15 +388,36 @@ final class AppModel {
         let selected = heroes.first { $0.id == pendingHeroesInstall?.key }
             ?? heroes.first { $0.install.platform == preferred } ?? heroes.first
         var addedHeroes = false
-        games = all.filter { game in
+        let displayed = all.filter { game in
             guard game.install.uid == "heroes" else { return true }
             guard !addedHeroes, game.id == selected?.id else { return false }
             addedHeroes = true
             return true
         }
+        games = LibraryOrder.sorted(displayed.filter { canReorder($0) }, by: libraryOrder, id: \.install.uid)
+            + displayed.filter { !canReorder($0) }
         refreshRunning(processes: processes)
         Log.info(.library, "scanned", nil, ["games": games.map { "\($0.install.uid)@\($0.install.version ?? "?")" }.joined(separator: ","),
                                             "missing": found.filter { !$0.isInstalled }.map(\.id).joined(separator: ",")])
+    }
+
+    /// Uses the last completed installation scan; dragging never probes a drive.
+    func canReorder(_ game: Game) -> Bool {
+        discoveredGames.contains { $0.id == game.id }
+    }
+
+    /// The order the library's games were dragged into, by uid.
+    private var libraryOrder = UserDefaults.standard.stringArray(forKey: "libraryOrder") ?? [] {
+        didSet { UserDefaults.standard.set(libraryOrder, forKey: "libraryOrder") }
+    }
+
+    /// Drops the game with uid `uid` before the one with `target`, or last
+    /// with nil, and remembers the order.
+    func moveGame(_ uid: String, before target: String?) {
+        libraryOrder = LibraryOrder.moving(uid, before: target, in: games.filter { canReorder($0) }.map(\.install.uid), remembered: libraryOrder)
+        games = LibraryOrder.sorted(games.filter { canReorder($0) }, by: libraryOrder, id: \.install.uid)
+            + games.filter { !canReorder($0) }
+        Log.info(.library, "reordered", nil, ["uid": uid])
     }
 
     func heroesEdition(_ platform: InstallPlatform) -> Game? {
@@ -643,7 +664,7 @@ final class AppModel {
     }
 
     func install(_ product: InstallableProduct, folder: URL, region: Region, languages: GameLanguages,
-                 platform requestedPlatform: InstallPlatform? = nil) async {
+                 platform requestedPlatform: InstallPlatform? = nil, keepsMacAwake: Bool = false) async {
         let platform = requestedPlatform ?? defaultPlatform(for: product)
         defer { ProcessMemory.releaseFreed() }
         let uid = platform.installKey(uid: product.uid)
@@ -657,12 +678,12 @@ final class AppModel {
                                                 "language": languages.text, "speech_language": languages.speech])
         let install = product.install(at: folder, region: region, languages: languages,
             tagString: "\(platform.manifestTag) \(region.launchOptionValue) \(languages.text) text \(languages.speech) speech", platform: platform)
-        await startDownload(DownloadRequest(kind: .install, install: install, product: product))
+        await startDownload(DownloadRequest(kind: .install, install: install, product: product), keepsMacAwake: keepsMacAwake)
     }
 
-    private func startDownload(_ request: DownloadRequest) async {
+    private func startDownload(_ request: DownloadRequest, keepsMacAwake: Bool = false) async {
         do {
-            try downloadQueue.enqueue(request)
+            try downloadQueue.enqueue(request, keepsMacAwake: keepsMacAwake)
             phases.removeValue(forKey: request.key)
             if request.kind == .install, request.install.productCode == "hero" { selectHeroesEdition(request.install.platform) }
             await runDownload(uid: request.key)
@@ -877,6 +898,9 @@ final class AppModel {
         }
         phases.removeValue(forKey: game.id)
         updates.removeValue(forKey: game.id)
+        if !discoveredGames.contains(where: { $0.install.uid == game.install.uid && $0.id != game.id }) {
+            libraryOrder.removeAll { $0 == game.install.uid }
+        }
         reload()
         if let cleanupError {
             let alert = NSAlert()
