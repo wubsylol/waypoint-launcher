@@ -26,20 +26,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let delegate = AppDelegate()
         app.delegate = delegate
         // Also makes `swift run` builds, which have no bundle, a regular app.
-        let menuOnly = UserDefaults.standard.bool(forKey: UpdatePreferences.hideDockKey) &&
-            UserDefaults.standard.bool(forKey: MenuBarItem.defaultsKey)
-        app.setActivationPolicy(menuOnly ? .accessory : .regular)
+        app.setActivationPolicy(.regular)
         withExtendedLifetime(delegate) { app.run() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Capture the hint before any system-service calls. This remains best effort.
+        let loginLaunch = Self.launchedAtLogin
         appUpdater.prepareForRestart = { [weak model] in await model?.prepareToQuit() ?? true }
         NSApp.mainMenu = MainMenu.make(for: self)
         menuBarItem = MenuBarItem(model: model, appUpdater: appUpdater)
         backgroundServices.openLibrary = { [weak self] in self?.showLibrary(nil) }
         backgroundServices.openAppUpdate = { [weak self] in self?.showLibrary(nil) }
+        backgroundServices.setLibraryOpen(!loginLaunch)
         backgroundServices.start(model: model, updater: appUpdater)
-        if !UserDefaults.standard.bool(forKey: UpdatePreferences.hideDockKey), !Self.launchedAtLogin {
+        // The launch marker is best effort. Unknown/manual launches show a window.
+        Log.info(.app, "launch_context", nil, ["login_item_hint": loginLaunch])
+        if !loginLaunch {
             showLibrary(nil)
         }
         // How long the launch took, to compare versions and Macs by the logs.
@@ -48,10 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private static var launchedAtLogin: Bool {
         let event = NSAppleEventManager.shared().currentAppleEvent
-        return event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        return event?.eventID == kAEOpenApplication && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
-
-    func applicationWillTerminate(_ notification: Notification) { backgroundServices.stop() }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard model.hasActiveDownloads || isTerminating else { return .terminateNow }
@@ -70,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// Sparkle's install-on-quit keep going. Reopening Waypoint (Dock click,
     /// Spotlight, Raycast, `open`) brings the library back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        if !hasVisibleWindows { showLibrary(nil) }
+        showLibrary(nil)
         return true
     }
 
@@ -89,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func showLibrary(_ sender: Any?) {
         let window = libraryWindow ?? makeLibraryWindow()
         libraryWindow = window
+        backgroundServices.setLibraryOpen(true)
         NSApp.activate(ignoringOtherApps: true)
         if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
@@ -129,13 +131,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.isReleasedWhenClosed = false
         if settingsWindow == nil { window.center() }
         settingsWindow = window
+        window.delegate = self
+        backgroundServices.setSettingsOpen(true)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 
     /// A closed library is let go, views and all; reopening builds a new one.
     func windowWillClose(_ notification: Notification) {
-        if notification.object as? NSWindow === libraryWindow { libraryWindow = nil }
+        if notification.object as? NSWindow === libraryWindow {
+            libraryWindow = nil
+            backgroundServices.setLibraryOpen(false)
+        }
+        if notification.object as? NSWindow === settingsWindow {
+            backgroundServices.setSettingsOpen(false)
+        }
     }
 
     // MARK: Commands

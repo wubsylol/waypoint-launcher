@@ -30,35 +30,50 @@ import Testing
     #expect(ledger.needsAlert(id: "waypoint", build: "build-a"))
 }
 
-@Test func forcedRefreshDuringBackgroundPassIsCoalescedButNeverLost() {
+@Test func queuedGameLaunchNeverWidensToOtherTitles() {
     var schedule = UpdateCheckSchedule()
-    let now = Date(timeIntervalSince1970: 10000)
-    let result1 = schedule.request(force: false, automatic: true, now: now)
-    #expect(result1)
-    let result2 = !schedule.request(force: true, automatic: true, now: now)
-    #expect(result2)
-    let result3 = !schedule.request(force: true, automatic: true, now: now)
-    #expect(result3)
-    // A completed install requests force:true while another title is waiting.
-    let result4 = schedule.complete(now: now)
-    #expect(result4)
-    let result5 = !schedule.complete(now: now)
-    #expect(result5)
-    let result6 = !schedule.request(force: false, automatic: true, now: now.addingTimeInterval(899))
-    #expect(result6)
-    let result7 = schedule.request(force: false, automatic: true, now: now.addingTimeInterval(900))
-    #expect(result7)
-    let result8 = !schedule.complete(now: now)
-    #expect(result8)
+    let started = schedule.request(force: false, automatic: true, scope: .all)
+    #expect(started)
+    let queued = schedule.request(force: false, automatic: true, scope: .games(["wowf"]))
+    #expect(!queued)
+    let again = schedule.complete()
+    #expect(again)
+    #expect(schedule.current == .games(["wowf"]))
+    #expect(schedule.current?.includes("wowf") == true)
+    #expect(schedule.current?.includes("wow") == false)
+    let done = schedule.complete()
+    #expect(!done)
 }
 
-@Test func automaticOptOutStillAllowsManualCheckAndCancellationAllowsRetry() {
+@Test func concurrentGameLaunchesKeepOnlyRequestedScopesAndManualCheckIsExplicit() {
     var schedule = UpdateCheckSchedule()
-    let result9 = !schedule.request(force: false, automatic: false)
-    #expect(result9)
-    let result10 = schedule.request(force: true, automatic: false)
-    #expect(result10)
+    _ = schedule.request(force: false, automatic: true, scope: .games(["wow"]))
+    _ = schedule.request(force: false, automatic: true, scope: .games(["wowf"]))
+    _ = schedule.request(force: false, automatic: true, scope: .games(["hero"]))
+    _ = schedule.complete()
+    #expect(schedule.current == .games(["wowf", "hero"]))
+    _ = schedule.request(force: true, automatic: false, scope: .all)
+    _ = schedule.complete()
+    #expect(schedule.current == .all)
+}
+
+@Test func automaticOptOutStillAllowsExplicitCheckAndNewLaunchesAreNotThrottled() {
+    var schedule = UpdateCheckSchedule()
+    let disabled = schedule.request(force: false, automatic: false)
+    #expect(!disabled)
+    let manual = schedule.request(force: true, automatic: false)
+    #expect(manual)
     schedule.cancel()
-    let result11 = schedule.request(force: true, automatic: false)
-    #expect(result11)
+    let launch = schedule.request(force: false, automatic: true, scope: .games(["wow"]))
+    #expect(launch)
+    _ = schedule.complete()
+    let nextLaunch = schedule.request(force: false, automatic: true, scope: .games(["wow"]))
+    #expect(nextLaunch)
+}
+
+@Test func dockAppearsForWindowsAndReturnsToMenuOnlyAfterClosing() {
+    #expect(AppPresentationPolicy.showsDock(hideDock: true, menuBarEnabled: true, windowsOpen: true))
+    #expect(!AppPresentationPolicy.showsDock(hideDock: true, menuBarEnabled: true, windowsOpen: false))
+    #expect(AppPresentationPolicy.showsDock(hideDock: true, menuBarEnabled: false, windowsOpen: false))
+    #expect(AppPresentationPolicy.showsDock(hideDock: false, menuBarEnabled: true, windowsOpen: false))
 }

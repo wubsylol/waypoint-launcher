@@ -119,6 +119,7 @@ final class AppModel {
     private(set) var updates: [String: UpdateCheck] = [:]
     @ObservationIgnored private var updateCheckSchedule = UpdateCheckSchedule()
     @ObservationIgnored var updateChecked: ((Game, UpdateCheck) -> Void)?
+    @ObservationIgnored var updateCleared: ((String) -> Void)?
 
     /// nil = use the region each game was installed for.
     var regionOverride: Region? {
@@ -246,22 +247,16 @@ final class AppModel {
             })
         }
         // Coming back to Waypoint picks up games installed or removed
-        // meanwhile, and checks for updates (throttled).
+        // meanwhile. Version checks run only at startup or a game launch.
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.reloadOffMainThread()
-                _ = Task {
-                    // Both go by the games the scan finds.
-                    while let scan = self?.scanOffMainThread { await scan.value }
-                    await self?.refreshCatalog()
-                    await self?.checkForUpdates()
-                }
             }
         })
         Task {
             await refreshCatalog()
-            await checkForUpdatesInBackground()
+            await checkForUpdatesAtStartup()
         }
         Task { await setUpAccounts() }
     }
@@ -441,25 +436,25 @@ final class AppModel {
             !cleaningFolders.contains(Self.folderKey(game.install.installPath))
     }
 
-    /// Asks Blizzard's version service which build is live. Cheap (one small
-    /// request per game), throttled to every 15 minutes unless forced.
-    /// Refresh the existing off-main-thread installation scan before polling,
-    /// even while menu-only and inactive: another launcher may have updated a game.
-    func checkForUpdatesInBackground() async {
+    /// Automatic checks happen at startup and game launch, never on a timer.
+    /// Refresh installation metadata off the main thread before the startup check.
+    func checkForUpdatesAtStartup() async {
         guard !isPreparingToQuit, UpdatePreferences.automatic() else { return }
         if scanOffMainThread == nil { scanOffMainThreadOnce() }
         while let scan = scanOffMainThread { await scan.value }
         await checkForUpdates()
     }
 
-    func checkForUpdates(force: Bool = false) async {
-        // Do not consume the throttle on startup before external drives are read.
+    func checkForUpdates(force: Bool = false, only gameID: String? = nil) async {
+        // Wait for in-progress external-drive discovery before selecting games.
         while let scan = scanOffMainThread { await scan.value }
         guard !isPreparingToQuit,
-              updateCheckSchedule.request(force: force, automatic: UpdatePreferences.automatic()) else { return }
+              updateCheckSchedule.request(force: force, automatic: UpdatePreferences.automatic(),
+                                          scope: gameID.map { .games([$0]) } ?? .all) else { return }
         defer { updateCheckSchedule.cancel() }
         repeat {
-            for game in discoveredGames where (game.family != .other || GameUpdate.canUpdate(game.install)) && game.isInstalled {
+            let scope = updateCheckSchedule.current ?? .games([])
+            for game in discoveredGames where scope.includes(game.id) && (game.family != .other || GameUpdate.canUpdate(game.install)) && game.isInstalled {
                 do {
                     let check = try await GameUpdate(install: game.install).check()
                     // A scan, uninstall or download can finish while the request is in flight.
@@ -475,6 +470,16 @@ final class AppModel {
                 }
             }
         } while updateCheckSchedule.complete() && !isPreparingToQuit
+    }
+
+    /// Enabling notifications may announce known updates without a new request.
+    func announceKnownUpdates() {
+        for game in discoveredGames where downloads[game.id] == nil && game.isInstalled {
+            if let check = updates[game.id], check.installedBuild == game.install.buildConfig,
+               check.installedVersion == game.install.version {
+                updateChecked?(game, check)
+            }
+        }
     }
 
     /// Downloads and installs the latest build; with `verify`, re-checks
@@ -669,8 +674,9 @@ final class AppModel {
 
     private func runDownload(uid: String) async {
         if await downloadQueue.run(key: uid) == .completed {
+            updates.removeValue(forKey: uid)
+            updateCleared?(uid)
             reload()
-            await checkForUpdates(force: true)
         }
     }
 
@@ -936,6 +942,13 @@ final class AppModel {
         Log.info(.launch, "requested", nil, ["uid": game.id, "version": game.install.version ?? "?",
                                              "force_sign_in": forceSignIn, "play_as": accountID != nil])
         guard discardDownload(uid: game.id) else { return }
+        // Public version metadata only, in parallel with launch. Offline checks
+        // must not delay authentication or prevent playing. No other title is queried.
+        Task { [weak self] in
+            guard let self, UpdatePreferences.automatic(), !isPreparingToQuit else { return }
+            if scanOffMainThread == nil { scanOffMainThreadOnce() }
+            await checkForUpdates(only: game.id)
+        }
         do {
             let screen = NSScreen.main ?? NSScreen.screens.first
             let displayID = (screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? CGMainDisplayID()

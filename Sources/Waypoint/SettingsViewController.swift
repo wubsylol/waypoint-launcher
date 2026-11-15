@@ -8,12 +8,10 @@ import ServiceManagement
 final class SettingsViewController: NSViewController {
     private let model: AppModel
     private let backgroundServices: BackgroundServices
-    private let hideDockCheckbox = NSButton(checkboxWithTitle: "Hide Dock icon (menu bar only)", target: nil, action: nil)
+    private let hideDockCheckbox = NSButton(checkboxWithTitle: "Hide Dock icon when windows are closed", target: nil, action: nil)
     private let loginCheckbox = NSButton(checkboxWithTitle: "Start Waypoint at login", target: nil, action: nil)
     private let automaticCheckbox = NSButton(checkboxWithTitle: "Automatically check for game updates", target: nil, action: nil)
     private let notificationsCheckbox = NSButton(checkboxWithTitle: "Notify me when updates are available", target: nil, action: nil)
-    private let testNotificationButton = NSButton(title: "Send test notification", target: nil, action: nil)
-    private let notificationTestNote = NSTextField(wrappingLabelWithString: "")
     private let backgroundNote = NSTextField(wrappingLabelWithString: "")
     private let loginSettings = NSButton(title: "Login Items Settings…", target: nil, action: nil)
     private var changingLogin = false
@@ -94,12 +92,7 @@ final class SettingsViewController: NSViewController {
             (automaticCheckbox, #selector(automaticChanged)),
             (notificationsCheckbox, #selector(notificationsChanged)),
             (loginSettings, #selector(openLoginSettings)),
-            (testNotificationButton, #selector(sendTestNotification)),
         ] { button.target = self; button.action = action }
-        notificationTestNote.font = .preferredFont(forTextStyle: .subheadline)
-        notificationTestNote.textColor = .secondaryLabelColor
-        notificationTestNote.preferredMaxLayoutWidth = 360
-        notificationTestNote.widthAnchor.constraint(equalToConstant: 360).isActive = true
         backgroundNote.font = .preferredFont(forTextStyle: .subheadline)
         backgroundNote.textColor = .secondaryLabelColor
         backgroundNote.preferredMaxLayoutWidth = 360
@@ -108,7 +101,7 @@ final class SettingsViewController: NSViewController {
         backgroundOptions.orientation = .vertical
         backgroundOptions.alignment = .leading
         backgroundOptions.spacing = 8
-        let updateOptions = NSStackView(views: [automaticCheckbox, notificationsCheckbox, testNotificationButton, notificationTestNote, backgroundNote])
+        let updateOptions = NSStackView(views: [automaticCheckbox, notificationsCheckbox, backgroundNote])
         updateOptions.orientation = .vertical
         updateOptions.alignment = .leading
         updateOptions.spacing = 8
@@ -185,12 +178,8 @@ final class SettingsViewController: NSViewController {
         loginCheckbox.state = backgroundServices.loginStatus == .enabled || backgroundServices.loginStatus == .requiresApproval ? .on : .off
         loginCheckbox.isEnabled = !changingLogin && backgroundServices.supportsSystemIntegration
         notificationsCheckbox.isEnabled = !changingNotifications && backgroundServices.supportsSystemIntegration
-        notificationTestNote.stringValue = backgroundServices.notificationTestStatus ?? ""
-        notificationTestNote.isHidden = backgroundServices.notificationTestStatus == nil
-        testNotificationButton.isEnabled = !backgroundServices.isTestingNotification && backgroundServices.supportsSystemIntegration &&
-            defaults.bool(forKey: UpdatePreferences.notificationsKey) && backgroundServices.notificationStatus == .authorized
         loginSettings.isHidden = backgroundServices.loginStatus != .requiresApproval
-        var note = "Checks installed games every 30 minutes while Waypoint is running. Updates require your approval. This personal build does not check for Waypoint updates."
+        var note = "Checks installed games when Waypoint starts, then only the selected game when you launch it. Updates require your approval."
         if !backgroundServices.supportsSystemIntegration { note += " Notifications and login items require an installed app bundle." }
         if backgroundServices.loginStatus == .requiresApproval { note += " Approve Waypoint in Login Items Settings." }
         if backgroundServices.notificationStatus == .denied { note += " Notifications are blocked in macOS Notification Settings." }
@@ -201,7 +190,6 @@ final class SettingsViewController: NSViewController {
     @objc private func hideDockChanged() { backgroundServices.setHideDock(hideDockCheckbox.state == .on) }
     @objc private func automaticChanged() {
         UserDefaults.standard.set(automaticCheckbox.state == .on, forKey: UpdatePreferences.automaticKey)
-        if automaticCheckbox.state == .on { Task { await model.checkForUpdates() } }
     }
     @objc private func loginChanged() {
         let enabled = loginCheckbox.state == .on
@@ -218,11 +206,10 @@ final class SettingsViewController: NSViewController {
             await backgroundServices.setNotificationsEnabled(enabled)
             changingNotifications = false; renderBackground()
             if UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey) {
-                await model.checkForUpdates(force: true)
+                model.announceKnownUpdates()
             }
         }
     }
-    @objc private func sendTestNotification() { Task { await backgroundServices.sendTestNotification() } }
     @objc private func openLoginSettings() { SMAppService.openSystemSettingsLoginItems() }
 
     private func renderRegion() {

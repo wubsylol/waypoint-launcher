@@ -4,7 +4,7 @@ import ServiceManagement
 import UserNotifications
 import WaypointCore
 
-/// Native lifecycle preferences. No helper daemon or credentials are involved.
+/// Native integration stays dormant unless notifications are on or Settings is open.
 @MainActor
 @Observable
 final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
@@ -12,74 +12,91 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
     private(set) var loginStatus: SMAppService.Status = .notRegistered
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var errorMessage: String?
-    private(set) var notificationTestStatus: String?
-    private(set) var isTestingNotification = false
     @ObservationIgnored var openLibrary: (() -> Void)?
     @ObservationIgnored var openAppUpdate: (() -> Void)?
     @ObservationIgnored private var announceAppUpdate: (() -> Void)?
-    @ObservationIgnored private var timer: Timer?
-    @ObservationIgnored private var wakeObserver: NSObjectProtocol?
     @ObservationIgnored private var defaultsObserver: NSObjectProtocol?
     @ObservationIgnored private var activeObserver: NSObjectProtocol?
     @ObservationIgnored private let ledger = UpdateAlertLedger()
     @ObservationIgnored private var pendingAlerts = Set<String>()
+    @ObservationIgnored private var notificationsWereEnabled = false
+    @ObservationIgnored private var libraryOpen = false
+    @ObservationIgnored private var settingsOpen = false
+    @ObservationIgnored private var statusRefresh: Task<Void, Never>?
+    @ObservationIgnored private var refreshStatusAgain = false
+
+    private var notificationsEnabled: Bool {
+        UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey)
+    }
 
     func start(model: AppModel, updater: AppUpdater) {
-        if supportsSystemIntegration { UNUserNotificationCenter.current().delegate = self }
         model.updateChecked = { [weak self] game, check in
-            guard let self, self.supportsSystemIntegration else { return }
+            guard let self, self.supportsSystemIntegration, self.notificationsEnabled else { return }
             guard check.isUpdateAvailable else {
                 UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["game:" + game.id])
                 return
             }
             self.notify(id: "game:" + game.id, build: check.latest.buildConfig,
-                         title: "\(game.displayName) update available", body: "Version \(check.latest.name) is ready to download.")
+                   title: "\(game.displayName) update available", body: "Version \(check.latest.name) is ready to download.")
+        }
+        model.updateCleared = { [weak self] id in
+            guard let self, self.supportsSystemIntegration, self.notificationsEnabled else { return }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["game:" + id])
         }
         updater.updateAvailable = { [weak self] version, build in
             self?.notify(id: "waypoint", build: build, title: "Waypoint update available",
                          body: "Waypoint \(version) is available. Click to view the update.")
         }
         updater.noUpdateAvailable = { [weak self] in
-            guard self?.supportsSystemIntegration == true else { return }
+            guard let self, self.supportsSystemIntegration, self.notificationsEnabled else { return }
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["waypoint"])
         }
         announceAppUpdate = { [weak updater] in updater?.announceAvailableUpdate() }
-        let check: @MainActor () -> Void = { [weak model] in
-            guard UpdatePreferences.automatic(), let model, !model.isPreparingToQuit else { return }
-            Task { await model.checkForUpdatesInBackground() }
-        }
-        timer = Timer.scheduledTimer(withTimeInterval: 30 * 60, repeats: true) { _ in
-            Task { @MainActor in check() }
-        }
-        timer?.tolerance = 120
-        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
-            Task { @MainActor in check() }
-        }
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in
-                self?.syncDockPolicy()
-            }
+            Task { @MainActor in self?.syncDockPolicy(); self?.syncNotifications() }
         }
         activeObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
-                self?.refreshStatus()
+                guard let self, self.settingsOpen else { return }
+                self.refreshStatus()
             }
         }
         syncDockPolicy()
-        refreshStatus()
-        check()
+        syncNotifications()
     }
 
-    func stop() { timer?.invalidate(); timer = nil }
+    private func syncNotifications() {
+        guard supportsSystemIntegration, notificationsWereEnabled != notificationsEnabled else { return }
+        notificationsWereEnabled = notificationsEnabled
+        if notificationsEnabled {
+            UNUserNotificationCenter.current().delegate = self
+        } else {
+            UNUserNotificationCenter.current().delegate = nil
+        }
+    }
 
+    func setLibraryOpen(_ open: Bool) { libraryOpen = open; syncDockPolicy() }
+    func setSettingsOpen(_ open: Bool) {
+        settingsOpen = open
+        syncDockPolicy()
+        if open { refreshStatus() }
+    }
+
+    /// Called only by Settings, never as a general launch/activation hook.
     func refreshStatus() {
-        guard supportsSystemIntegration else { loginStatus = .notFound; return }
+        guard supportsSystemIntegration, settingsOpen else { return }
         loginStatus = SMAppService.mainApp.status
-        Task {
-            notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        guard statusRefresh == nil else { refreshStatusAgain = true; return }
+        statusRefresh = Task {
+            repeat {
+                refreshStatusAgain = false
+                guard settingsOpen else { break }
+                let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+                if settingsOpen { notificationStatus = status }
+            } while refreshStatusAgain && settingsOpen
+            statusRefresh = nil
         }
     }
 
@@ -98,73 +115,27 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
         errorMessage = nil
         if enabled {
             do {
-                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+                let center = UNUserNotificationCenter.current()
+                let granted = try await center.requestAuthorization(options: [.alert, .sound])
                 UserDefaults.standard.set(granted, forKey: UpdatePreferences.notificationsKey)
+                syncNotifications()
                 if granted { announceAppUpdate?() }
-                if !granted { errorMessage = "Allow Waypoint notifications in System Settings to receive update alerts." }
+                else { errorMessage = "Allow Waypoint notifications in System Settings to receive update alerts." }
             } catch {
                 UserDefaults.standard.set(false, forKey: UpdatePreferences.notificationsKey)
+                syncNotifications()
                 errorMessage = "Could not enable notifications: \(error.localizedDescription)"
             }
         } else {
             UserDefaults.standard.set(false, forKey: UpdatePreferences.notificationsKey)
+            syncNotifications()
             UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
             UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         }
         refreshStatus()
     }
 
-    func sendTestNotification() async {
-        guard supportsSystemIntegration, !isTestingNotification,
-              UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey) else { return }
-        isTestingNotification = true
-        defer { isTestingNotification = false }
-        errorMessage = nil
-        notificationTestStatus = "Sending test notification…"
-        let center = UNUserNotificationCenter.current()
-        let settings = await center.notificationSettings()
-        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
-            notificationTestStatus = "macOS has blocked notifications. Enable Waypoint in System Settings → Notifications."
-            refreshStatus()
-            return
-        }
-        guard UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey) else {
-            notificationTestStatus = "Test cancelled: update notifications were turned off."
-            return
-        }
-        let identifier = "waypoint-notification-test"
-        let runID = UUID().uuidString
-        center.removeDeliveredNotifications(withIdentifiers: [identifier])
-        let content = UNMutableNotificationContent()
-        content.userInfo = ["waypointTestRun": runID]
-        content.title = "Waypoint notifications are ready"
-        content.body = "You’ll be notified when an installed game update is available."
-        content.sound = .default
-        do {
-            try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
-            // The scheduling acknowledgement precedes delivery. Give the system
-            // a moment, then inspect only our own test notification.
-            try await Task.sleep(for: .seconds(1))
-            let delivered = await center.deliveredNotifications()
-            let confirmed = delivered.contains {
-                $0.request.identifier == identifier && $0.request.content.userInfo["waypointTestRun"] as? String == runID
-            }
-            if confirmed {
-                notificationTestStatus = "Delivered to Notification Centre. Focus and screen sharing can hide the banner."
-            } else {
-                notificationTestStatus = "Accepted by macOS; no delivery confirmed yet. Check Focus and notification settings, including notifications while sharing the display."
-            }
-            Log.info(.app, "notification_test", nil, ["delivered": confirmed,
-                "alerts_enabled": settings.alertSetting == .enabled])
-        } catch {
-            notificationTestStatus = "Could not send test notification: \(error.localizedDescription)"
-            Log.warning(.app, "notification_test_failed", nil, ["error": error.localizedDescription])
-        }
-    }
-
     func setHideDock(_ hidden: Bool) {
-        // An explicit menu-only choice also opts into the menu bar. Never leave
-        // someone without either the Dock or a status item to reopen Waypoint.
         if hidden { UserDefaults.standard.set(true, forKey: MenuBarItem.defaultsKey) }
         UserDefaults.standard.set(hidden, forKey: UpdatePreferences.hideDockKey)
         syncDockPolicy()
@@ -172,30 +143,35 @@ final class BackgroundServices: NSObject, UNUserNotificationCenterDelegate {
 
     private func syncDockPolicy() {
         let defaults = UserDefaults.standard
-        if !defaults.bool(forKey: MenuBarItem.defaultsKey), defaults.bool(forKey: UpdatePreferences.hideDockKey) {
+        let menuEnabled = defaults.bool(forKey: MenuBarItem.defaultsKey)
+        if !menuEnabled, defaults.bool(forKey: UpdatePreferences.hideDockKey) {
             defaults.set(false, forKey: UpdatePreferences.hideDockKey)
         }
-        let policy: NSApplication.ActivationPolicy = defaults.bool(forKey: UpdatePreferences.hideDockKey) ? .accessory : .regular
-        if NSApp.activationPolicy() != policy { NSApp.setActivationPolicy(policy) }
+        let showDock = AppPresentationPolicy.showsDock(hideDock: defaults.bool(forKey: UpdatePreferences.hideDockKey),
+                                                      menuBarEnabled: menuEnabled, windowsOpen: libraryOpen || settingsOpen)
+        let policy: NSApplication.ActivationPolicy = showDock ? .regular : .accessory
+        if NSApp.activationPolicy() != policy {
+            let applied = NSApp.setActivationPolicy(policy)
+            Log.info(.app, "presentation_changed", nil, ["shows_dock": showDock,
+                "windows_open": libraryOpen || settingsOpen, "applied": applied])
+        }
     }
 
     private func notify(id: String, build: String, title: String, body: String) {
-        guard supportsSystemIntegration, UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey),
+        guard supportsSystemIntegration, notificationsEnabled,
               ledger.needsAlert(id: id, build: build), pendingAlerts.insert(id).inserted else { return }
         Task {
             defer { pendingAlerts.remove(id) }
             let center = UNUserNotificationCenter.current()
             let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional,
-                  UserDefaults.standard.bool(forKey: UpdatePreferences.notificationsKey) else { return }
+                  notificationsEnabled else { return }
             let content = UNMutableNotificationContent()
             content.title = title; content.body = body; content.sound = .default
             do {
                 try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
                 ledger.record(id: id, build: build)
-            } catch {
-                Log.warning(.app, "update_notification_failed", nil, ["error": error.localizedDescription])
-            }
+            } catch { Log.warning(.app, "update_notification_failed", nil, ["error": error.localizedDescription]) }
         }
     }
 

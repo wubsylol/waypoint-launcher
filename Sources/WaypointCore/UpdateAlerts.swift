@@ -26,30 +26,44 @@ public struct UpdateAlertLedger {
     }
 }
 
-/// Coalesces concurrent checks without losing a forced post-download refresh.
+/// A queued game-launch check must never widen into a check of other games.
+public enum UpdateCheckScope: Equatable, Sendable {
+    case all
+    case games(Set<String>)
+    public func includes(_ id: String) -> Bool {
+        switch self { case .all: true; case .games(let ids): ids.contains(id) }
+    }
+    fileprivate func merging(_ other: Self) -> Self {
+        switch (self, other) {
+        case (.all, _), (_, .all): .all
+        case (.games(let a), .games(let b)): .games(a.union(b))
+        }
+    }
+}
+
+/// Coalesce concurrent requests while retaining the caller's exact game scope.
 public struct UpdateCheckSchedule {
-    private var running = false
-    private var forcedAgain = false
-    private var lastCheck: Date?
+    public private(set) var current: UpdateCheckScope?
+    private var pending: UpdateCheckScope?
     public init() {}
-    public mutating func request(force: Bool, automatic: Bool, now: Date = Date()) -> Bool {
+    public mutating func request(force: Bool, automatic: Bool, scope: UpdateCheckScope = .all) -> Bool {
         guard force || automatic else { return false }
-        if running {
-            if force { forcedAgain = true }
+        if current != nil {
+            pending = pending.map { $0.merging(scope) } ?? scope
             return false
         }
-        if !force, let lastCheck, now.timeIntervalSince(lastCheck) < 15 * 60 { return false }
-        running = true; lastCheck = now
+        current = scope
         return true
     }
-    /// True means the owner must immediately run a fresh pass with current installs.
-    public mutating func complete(now: Date = Date()) -> Bool {
-        if forcedAgain {
-            forcedAgain = false; lastCheck = now
-            return true
-        }
-        running = false
-        return false
+    public mutating func complete() -> Bool {
+        current = pending; pending = nil
+        return current != nil
     }
-    public mutating func cancel() { running = false; forcedAgain = false }
+    public mutating func cancel() { current = nil; pending = nil }
+}
+
+public enum AppPresentationPolicy {
+    public static func showsDock(hideDock: Bool, menuBarEnabled: Bool, windowsOpen: Bool) -> Bool {
+        windowsOpen || !hideDock || !menuBarEnabled
+    }
 }
