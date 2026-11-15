@@ -66,3 +66,9 @@ is unchanged. Game activity appears only on game rows. Client-only rows name the
 Battle.net desktop/mobile apps. All existing authentication and cleanup controls
 remain unchanged. 84 targeted checks passed, including mobile-handle decoding,
 game-first ordering, mixed game/client filtering and Overwatch artwork lookup.
+
+Visual verification of friends.2: synthetic game friends precede client-only
+friends; WoW plus desktop/mobile handles displays only WoW; backgrounds and
+right-side game icons render correctly using cached Hearthstone/WoW/Diablo IV
+artwork. App-only rows have no game artwork or repeated status text. Demo exited
+before replacing the experimental output app; real friend data was not captured.
