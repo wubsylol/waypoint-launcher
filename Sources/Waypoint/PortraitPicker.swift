@@ -35,8 +35,6 @@ final class PortraitImages {
         return nil
     }
 
-    func retry() { failures = [] }
-
     nonisolated private static func fetch(_ choice: AccountPortrait) async throws -> Data {
         let directory = URL.cachesDirectory.appendingPathComponent("io.wubs.waypoint/portraits-v1", isDirectory: true)
         let file = directory.appendingPathComponent(choice.id + ".png")
@@ -79,11 +77,50 @@ final class PortraitImages {
     }
 }
 
+/// Keep the portrait and caption together at the centre of the native button.
+@MainActor
+private final class PortraitButton: NSButton {
+    let portraitView = NSImageView()
+
+    init(name: String, target: AnyObject?, action: Selector) {
+        super.init(frame: .zero)
+        self.target = target
+        self.action = action
+        title = ""
+        bezelStyle = .regularSquare
+        setButtonType(.toggle)
+        setAccessibilityLabel(name)
+        let caption = NSTextField(labelWithString: name)
+        caption.font = .systemFont(ofSize: 11)
+        caption.alignment = .center
+        let content = NSStackView(views: [portraitView, caption])
+        content.orientation = .vertical
+        content.alignment = .centerX
+        content.spacing = 6
+        content.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(content)
+        portraitView.imageScaling = .scaleProportionallyUpOrDown
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 106),
+            heightAnchor.constraint(equalToConstant: 84),
+            portraitView.widthAnchor.constraint(equalToConstant: 40),
+            portraitView.heightAnchor.constraint(equalToConstant: 40),
+            content.centerXAnchor.constraint(equalTo: centerXAnchor),
+            content.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        super.hitTest(point) == nil ? nil : self
+    }
+}
+
 @MainActor
 final class PortraitPicker: NSWindowController {
     private static var current: PortraitPicker?
-    private var buttons: [(AccountPortrait, NSButton)] = []
-    private let status = NSTextField(wrappingLabelWithString: "")
+    private var buttons: [(AccountPortrait?, PortraitButton)] = []
     private let model: AppModel
     private let accountID: String
 
@@ -98,7 +135,7 @@ final class PortraitPicker: NSWindowController {
     init(model: AppModel, account: Account) {
         self.model = model
         accountID = account.id
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 540, height: 540),
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 336),
                             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         panel.title = "Choose Portrait — \(account.displayName)"
         panel.isReleasedWhenClosed = false
@@ -110,47 +147,32 @@ final class PortraitPicker: NSWindowController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView!.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: panel.contentView!.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: panel.contentView!.trailingAnchor, constant: -20),
-            stack.topAnchor.constraint(equalTo: panel.contentView!.topAnchor, constant: 20)
+            stack.leadingAnchor.constraint(equalTo: panel.contentView!.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: panel.contentView!.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: panel.contentView!.topAnchor, constant: 16)
         ])
-        for game in ["World of Warcraft", "Diablo III"] {
-            let label = NSTextField(labelWithString: game)
-            label.font = .boldSystemFont(ofSize: 13)
-            stack.addArrangedSubview(label)
-            let choices = AccountPortrait.choices.filter { $0.game == game }
-            for offset in stride(from: 0, to: choices.count, by: 4) {
-                let row = NSStackView()
-                row.spacing = 8
-                for choice in choices.dropFirst(offset).prefix(4) {
-                    let button = NSButton(title: choice.name, target: self, action: #selector(selectPortrait(_:)))
-                    button.identifier = NSUserInterfaceItemIdentifier(choice.id)
-                    button.imagePosition = .imageAbove
-                    button.imageScaling = .scaleProportionallyDown
-                    button.bezelStyle = .regularSquare
-                    button.setButtonType(.toggle)
-                    button.font = .systemFont(ofSize: 11)
-                    button.toolTip = "Use \(choice.name) for \(account.displayName)"
-                    button.setAccessibilityLabel(choice.name)
-                    button.widthAnchor.constraint(equalToConstant: 118).isActive = true
-                    button.heightAnchor.constraint(equalToConstant: 90).isActive = true
-                    row.addArrangedSubview(button)
-                    buttons.append((choice, button))
-                }
-                stack.addArrangedSubview(row)
+        let choices: [AccountPortrait?] = [nil] + AccountPortrait.choices.map { Optional($0) }
+        for offset in stride(from: 0, to: choices.count, by: 4) {
+            let row = NSStackView()
+            row.spacing = 8
+            for choice in choices.dropFirst(offset).prefix(4) {
+                let name = choice?.name ?? "Waypoint"
+                let button = PortraitButton(name: name, target: self, action: #selector(selectPortrait(_:)))
+                button.identifier = NSUserInterfaceItemIdentifier(choice?.id ?? "default")
+                button.toolTip = "Use \(name) for \(account.displayName)"
+                row.addArrangedSubview(button)
+                buttons.append((choice, button))
             }
+            stack.addArrangedSubview(row)
         }
-        status.font = .systemFont(ofSize: 11)
-        status.textColor = .secondaryLabelColor
-        stack.addArrangedSubview(status)
         let actions = NSStackView()
-        actions.spacing = 12
-        actions.addArrangedSubview(NSButton(title: "Use Default Icon", target: self, action: #selector(reset)))
-        actions.addArrangedSubview(NSButton(title: "Retry Images", target: self, action: #selector(retry)))
+        actions.addArrangedSubview(NSView())
         let done = NSButton(title: "Done", target: self, action: #selector(done))
         done.keyEquivalent = "\r"
         actions.addArrangedSubview(done)
         stack.addArrangedSubview(actions)
+        actions.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        panel.setContentSize(NSSize(width: 480, height: stack.fittingSize.height + 32))
         panel.center()
         observeChanges { [weak self] in self?.render() }
     }
@@ -160,24 +182,41 @@ final class PortraitPicker: NSWindowController {
     private func render() {
         let saved = model.accounts.first { $0.id == accountID }
         for (choice, button) in buttons {
-            let portrait = PortraitImages.shared.image(id: choice.id)
-            let display = portrait?.copy() as? NSImage
-            display?.size = NSSize(width: 48, height: 48)
-            button.image = display ?? .symbol("person.crop.circle", pointSize: 32)
-            button.isEnabled = saved != nil && portrait != nil
-            button.state = saved?.portraitID == choice.id ? .on : .off
+            let portrait = choice.flatMap { PortraitImages.shared.image(id: $0.id) }
+            button.portraitView.image = portrait ?? .waypointPortrait
+            button.isEnabled = saved != nil && (choice == nil || portrait != nil)
+            button.state = saved?.portraitID == choice?.id ? .on : .off
+            if let choice, PortraitImages.shared.failures.contains(choice.id) {
+                button.toolTip = "\(choice.name) couldn’t load from Blizzard. Please report this if it persists."
+            }
         }
-        let failures = PortraitImages.shared.failures.count
-        status.stringValue = failures > 0
-            ? "Some portraits couldn’t load. Your saved choice is unchanged. Try again when connected."
-            : "Artwork loads directly from Blizzard’s CDN and stays cached for offline use."
     }
 
     @objc private func selectPortrait(_ sender: NSButton) {
         guard let id = sender.identifier?.rawValue else { return }
-        model.setPortrait(id, for: accountID)
+        model.setPortrait(id == "default" ? nil : id, for: accountID)
     }
-    @objc private func reset() { model.setPortrait(nil, for: accountID) }
-    @objc private func retry() { PortraitImages.shared.retry() }
     @objc private func done() { close() }
+}
+
+extension NSImage {
+    /// Use the bundled application artwork, never another installed app's icon.
+    @MainActor static let waypointPortrait: NSImage = {
+        guard let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+              let source = NSImage(contentsOf: iconURL) else {
+            // SwiftPM development launches have no bundled Resources directory.
+            return .symbol("person.crop.circle", pointSize: 24) ?? NSImage()
+        }
+        let result = NSImage(size: NSSize(width: 24, height: 24), flipped: false) { rect in
+            NSBezierPath(ovalIn: rect).addClip()
+            // Remove the app icon’s transparent macOS padding before the circular crop.
+            let side = min(source.size.width, source.size.height) * 0.8
+            source.draw(in: rect, from: NSRect(x: (source.size.width - side) / 2,
+                y: (source.size.height - side) / 2, width: side, height: side),
+                operation: .sourceOver, fraction: 1)
+            return true
+        }
+        result.isTemplate = false
+        return result
+    }()
 }

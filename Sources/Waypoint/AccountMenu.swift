@@ -76,12 +76,9 @@ extension AccountTint {
 }
 
 extension NSImage {
-    /// The account's avatar: a person on a circle in its tint, so accounts
-    /// tell apart at a glance. Signed out, the plain outline.
+    /// The selected portrait, or the circular Waypoint artwork by default.
     @MainActor static func account(_ account: Account?) -> NSImage? {
-        guard let account else { return .symbol("person.crop.circle") }
-        if let id = account.portraitID, let portrait = PortraitImages.shared.image(id: id) { return portrait }
-        let colors = NSImage.SymbolConfiguration(paletteColors: [.white, account.tint.color])
-        return .symbol("person.crop.circle.fill")?.withSymbolConfiguration(colors)
+        if let id = account?.portraitID, let portrait = PortraitImages.shared.image(id: id) { return portrait }
+        return .waypointPortrait
     }
 }
