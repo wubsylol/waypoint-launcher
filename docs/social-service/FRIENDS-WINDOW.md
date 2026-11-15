@@ -47,3 +47,22 @@ Friends has its own frame key; the library retains its existing frame key.
 The bundled experimental build is ad-hoc signed, Apple silicon only, with no
 self-update feed. It is separate from ~/Applications/Waypoint.app and retains the
 live build's resource/runtime descriptors. It is a debug test build, not a release.
+
+## Game-first artwork refinement
+
+BSAp is identified as the Battle.net mobile app (user-confirmed). Within online
+friends, in-game rows lead app-only rows, alphabetically within each group.
+A game row hides desktop/mobile client handles, retains its real game titles,
+and uses the same AppModel artwork lookup, BannerView strength0.75 and
+ProductIconView as Available Games. The game icon is on the right. Missing or
+disabled artwork falls back to the existing product-initial tile; refresh of
+catalog/artwork revisions redraws the rows. Overwatch uses product code pro,
+not installation UID prometheus. The protocol does not distinguish WoW editions,
+so WoW uses the existing generic World of Warcraft catalog art.
+
+Repeated online/away/busy text is removed from rows. Color dots, status tooltips
+and accessibility labels preserve that information. Offline/unavailable grouping
+is unchanged. Game activity appears only on game rows. Client-only rows name the
+Battle.net desktop/mobile apps. All existing authentication and cleanup controls
+remain unchanged. 84 targeted checks passed, including mobile-handle decoding,
+game-first ordering, mixed game/client filtering and Overwatch artwork lookup.

@@ -1263,3 +1263,27 @@ private func nativeProfileReplies(tag: String? = "Example#1234", owner: UInt64 =
     #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "Pro") == nil)
     #expect(NativeGameAccounts.CredentialTarget.hearthstone.productCode == "hsb")
 }
+
+@Test func friendPresentationPrioritizesGamesAndSuppressesClientHandles() {
+    let mobile = FriendPresenceRow(battleTag: "Alpha#1234", status: "Online", games: ["Battle.net mobile app"], activity: nil)
+    let game = FriendPresenceRow(battleTag: "Zeta#1234", status: "Away", games: ["Battle.net app", "Battle.net mobile app", "World of Warcraft"], activity: nil)
+    let desktop = FriendPresenceRow(battleTag: "Beta#1234", status: "Online", games: ["Battle.net app"], activity: nil)
+    #expect(!mobile.isInGame && !desktop.isInGame && game.isInGame)
+    #expect(game.visibleTitles == ["World of Warcraft"] && game.artworkProductCode == "wow")
+    #expect(mobile.visibleTitles == ["Battle.net mobile app"] && mobile.artworkProductCode == nil)
+    let overwatch = FriendPresenceRow(battleTag: nil, status: "Online", games: ["Overwatch"], activity: nil)
+    #expect(overwatch.artworkProductCode == WindowsTitle.overwatch.rawValue)
+    let sorted = [mobile, desktop, game].sorted(by: FriendPresenceRow.inGameFirst)
+    #expect(sorted.map(\.battleTag) == ["Zeta#1234", "Alpha#1234", "Beta#1234"])
+}
+
+@Test func presenceRecognizesMobileClientWithoutTreatingItAsGame() throws {
+    let handle = BGSWire.number(1, 456) + BGSWire.number(2, 0x42534170) + BGSWire.number(3, 1)
+    let key = BGSWire.number(1, 0x424e) + BGSWire.number(2, 1) + BGSWire.number(3, 20)
+    let field = BGSWire.bytes(1, key) + BGSWire.bytes(2, BGSWire.bytes(5, BGSWire.bytes(1, BGSWire.bytes(1, handle))))
+    let state = BGSWire.bytes(1, BGSWire.number(1, 42) + BGSWire.bytes(3, field))
+    let result = try PresenceDiagnosticPage.decode(state, expectedFriend: 42)
+    #expect(result.onlineGameTitles == ["Battle.net mobile app"])
+    let row = FriendPresenceRow(battleTag: nil, status: result.availabilityLabel, games: result.onlineGameTitles.sorted(), activity: nil)
+    #expect(!row.isInGame)
+}

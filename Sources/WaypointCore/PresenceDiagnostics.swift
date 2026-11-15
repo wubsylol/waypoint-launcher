@@ -6,6 +6,30 @@ public struct FriendPresenceRow: Sendable {
     public let status: String
     public let games: [String]
     public let activity: String?
+    private static let clients: Set<String> = ["Battle.net app", "Battle.net mobile app", "Other title (BSAp)"]
+    private var gameNames: [String] { games.filter { !Self.clients.contains($0) } }
+    public var isInGame: Bool { status != "Offline" && status != "Status unavailable" && !gameNames.isEmpty }
+    /// Client handles never compete with a game's visible activity.
+    public var visibleTitles: [String] { isInGame ? gameNames : games }
+    public var artworkProductCode: String? {
+        guard isInGame else { return nil }
+        return gameNames.compactMap { title in
+            switch title {
+            case "World of Warcraft": return "wow"
+            case "Diablo IV": return "fenris"
+            case "Diablo III": return "d3"
+            case "Hearthstone": return "hsb"
+            case "Heroes of the Storm": return "hero"
+            case "Overwatch": return "pro"
+            case "StarCraft II": return "s2"
+            default: return nil
+            }
+        }.first
+    }
+    public static func inGameFirst(_ lhs: Self, _ rhs: Self) -> Bool {
+        if lhs.isInGame != rhs.isInGame { return lhs.isInGame }
+        return (lhs.battleTag ?? "").localizedStandardCompare(rhs.battleTag ?? "") == .orderedAscending
+    }
     public init(battleTag: String?, status: String, games: [String], activity: String?) {
         self.battleTag = battleTag; self.status = status; self.games = games; self.activity = activity
     }
@@ -145,6 +169,7 @@ enum PresenceDiagnosticPage {
         case 0x50726f: return "Overwatch"
         case 0x5332: return "StarCraft II"
         case 0x417070: return "Battle.net app"
+        case 0x42534170: return "Battle.net mobile app"
         default:
             let bytes = (0..<4).reversed().map { UInt8(truncatingIfNeeded: title >> ($0 * 8)) }.drop(while: { $0 == 0 })
             if !bytes.isEmpty, bytes.allSatisfy({ (32...126).contains($0) }), let code = String(bytes: bytes, encoding: .ascii) {

@@ -61,13 +61,14 @@ final class FriendsViewController: NSViewController, NSSearchFieldDelegate {
             scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 120),
         ])
         view = root
-        observeChanges { [weak self] in self?.accountChanged() }
+        observeChanges { [weak self] in self?.accountChanged(); self?.render() }
         if isDemo {
             rows = [
-                FriendPresenceRow(battleTag: "Jaina#1201", status: "Online", games: ["World of Warcraft"], activity: "Exploring Azeroth"),
+                FriendPresenceRow(battleTag: "Jaina#1201", status: "Online", games: ["Battle.net app", "Battle.net mobile app", "World of Warcraft"], activity: "Exploring Azeroth"),
                 FriendPresenceRow(battleTag: "Lorath#1202", status: "Busy", games: ["Diablo IV"], activity: "Sanctuary"),
                 FriendPresenceRow(battleTag: "Chromie#1203", status: "Away", games: ["Battle.net app"], activity: nil),
                 FriendPresenceRow(battleTag: "Anduin#1204", status: "Online", games: ["Hearthstone"], activity: "In a match"),
+                FriendPresenceRow(battleTag: "Alexstrasza#1206", status: "Online", games: ["Battle.net mobile app"], activity: nil),
                 FriendPresenceRow(battleTag: "Thrall#1205", status: "Offline", games: [], activity: nil),
             ]
             lastRefresh = Date(); snapshotComplete = true
@@ -133,7 +134,7 @@ final class FriendsViewController: NSViewController, NSSearchFieldDelegate {
         let filtered = rows.filter { row in
             query.isEmpty || ([row.battleTag ?? "", row.status] + row.games + [row.activity ?? ""])
                 .contains { $0.localizedCaseInsensitiveContains(query) }
-        }.sorted { ($0.battleTag ?? "").localizedStandardCompare($1.battleTag ?? "") == .orderedAscending }
+        }.sorted(by: FriendPresenceRow.inGameFirst)
         let unknown = filtered.filter { $0.status == "Status unavailable" }
         let online = filtered.filter { $0.status != "Offline" && $0.status != "Status unavailable" }, away = filtered.filter { $0.status == "Offline" }
         if let lastRefresh {
@@ -183,23 +184,60 @@ final class FriendsViewController: NSViewController, NSSearchFieldDelegate {
         let color: NSColor = switch row.status { case "Offline": .tertiaryLabelColor; case "Away": .systemOrange; case "Busy": .systemRed; case "Status unavailable", "Online (status unavailable)": .secondaryLabelColor; default: .systemGreen }
         let avatar = FriendsMonogram(name: row.battleTag ?? "?", color: color)
         avatar.widthAnchor.constraint(equalToConstant: 34).isActive = true; avatar.heightAnchor.constraint(equalToConstant: 34).isActive = true
+        avatar.setAccessibilityElement(true); avatar.setAccessibilityRole(.image)
+        avatar.setAccessibilityLabel(row.status); avatar.toolTip = row.status
         let name = NSTextField.label(.body); name.stringValue = row.battleTag ?? "BattleTag unavailable"
         name.font = .systemFont(ofSize: 13, weight: .semibold)
-        let detail = NSTextField.label(.caption1, color: .secondaryLabelColor)
-        let games = row.games.filter { $0 != "Battle.net app" }
-        detail.stringValue = ([row.status] + games).joined(separator: " · ")
-        let text = NSStackView(views: [name, detail]); text.orientation = .vertical; text.alignment = .leading; text.spacing = 3
-        if let activity = row.activity, !activity.isEmpty {
+        let text = NSStackView(views: [name]); text.orientation = .vertical; text.alignment = .leading; text.spacing = 3
+        name.widthAnchor.constraint(equalTo: text.widthAnchor).isActive = true
+        if !row.visibleTitles.isEmpty {
+            let detail = NSTextField.label(.caption1, color: .secondaryLabelColor)
+            detail.stringValue = row.visibleTitles.joined(separator: " · ")
+            detail.toolTip = detail.stringValue
+            text.addArrangedSubview(detail); detail.widthAnchor.constraint(equalTo: text.widthAnchor).isActive = true
+        }
+        if row.isInGame, let activity = row.activity, !activity.isEmpty {
             let label = NSTextField.label(.caption1, color: .secondaryLabelColor); label.stringValue = activity
             text.addArrangedSubview(label); label.widthAnchor.constraint(equalTo: text.widthAnchor).isActive = true
         }
-        for label in [name, detail] { label.widthAnchor.constraint(equalTo: text.widthAnchor).isActive = true }
         let stack = NSStackView(views: [avatar, text]); stack.spacing = 10; stack.alignment = .centerY
-        stack.edgeInsets = NSEdgeInsets(top: 9, left: 2, bottom: 9, right: 2)
-        text.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -48).isActive = true
+        stack.edgeInsets = NSEdgeInsets(top: 9, left: 10, bottom: 9, right: 10)
+        if row.isInGame {
+            let icon = ProductIconView()
+            icon.letter = String(row.visibleTitles.first?.prefix(1) ?? "G")
+            let artwork = row.artworkProductCode.map { model.artwork(productCode: $0) }
+            icon.file = artwork?.icon
+            icon.toolTip = row.visibleTitles.joined(separator: " · ")
+            icon.widthAnchor.constraint(equalToConstant: 30).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 30).isActive = true
+            stack.addArrangedSubview(icon)
+            let cell = NSView()
+            cell.addSubview(stack); stack.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                stack.leadingAnchor.constraint(equalTo: cell.leadingAnchor), stack.trailingAnchor.constraint(equalTo: cell.trailingAnchor),
+                stack.topAnchor.constraint(equalTo: cell.topAnchor), stack.bottomAnchor.constraint(equalTo: cell.bottomAnchor),
+            ])
+            if let picture = artwork?.picture {
+                let banner = BannerView(); banner.strength = 0.75
+                banner.translatesAutoresizingMaskIntoConstraints = false
+                cell.addSubview(banner, positioned: .below, relativeTo: stack)
+                NSLayoutConstraint.activate([
+                    banner.widthAnchor.constraint(equalTo: cell.widthAnchor, multiplier: BannerView.share, constant: 16 * BannerView.share),
+                    banner.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: 8),
+                    banner.topAnchor.constraint(equalTo: cell.topAnchor, constant: 2),
+                    banner.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -2),
+                ])
+                banner.show(picture: picture)
+            }
+            text.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -104).isActive = true
+            add(cell)
+        } else {
+            text.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -64).isActive = true
+            add(stack)
+        }
         text.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        add(stack)
     }
+
 }
 
 @MainActor private final class FriendsMonogram: NSView {
