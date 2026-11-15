@@ -4,7 +4,8 @@ Current mode: version0.0.18, opt-in local BattleTag viewer. Refresh Friends
 uses the version16 backend with the schema’s fetch_names option enabled.
 Names remain hidden until Show Friends;
 no list is exported or saved. The previous count-only live result returned45
-records. Name correctness/completeness remains user-verified only; presence and
+records; the user confirmed BattleTags appear with version18. Completeness and
+remaining placeholders are not yet confirmed; presence and
 messaging are untested. Older modes below are historical. Temporary credential
 issuance means this is not an entirely read-only RPC sequence.
 
@@ -478,4 +479,5 @@ ID and BattleTag reach the core result; full_name4 and attributes5 are discarded
 The opt-in local viewer still retains only BattleTag/numbered placeholder strings,
 with no names/IDs exported or logged.43 targeted tests pass, including options
 on initial/continuation pages and a synthetic private-real-name/attribute fixture
-that is discarded. Independent review found no blockers. Live fix unverified.
+that is discarded. Independent review found no blockers. The user subsequently confirmed BattleTags
+now appear; see LIVE-CONTROLS.md. Completeness remains unverified.

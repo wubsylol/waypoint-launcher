@@ -131,3 +131,19 @@ Offline schema review found GetFriendsRequest.options1 contains
 GetFriendsOptions.fetch_names1 (bool). Previous controls omitted options and
 therefore did not explicitly request names. This is a concrete missing request
 field and the next controlled change; it is not yet a demonstrated live fix.
+
+## BattleTags returned — version 0.0.18 (2026-11-15)
+
+User reported that BattleTags now appear in the opt-in local viewer after the
+fetch_names option was enabled. No friend names, raw IDs or screenshots were
+requested or inspected by the operator. This confirms usable BattleTag strings
+for the tested snapshot and resolves the all-placeholder version17 result.
+The user did not explicitly confirm completeness or absence of every remaining
+placeholder, so those remain unverified. No presence, live update, messaging or
+game/official-launcher coexistence test was performed.
+
+Working friends-snapshot baseline: temporary same-owner App credential, source
+connection closure, owner-verified App authentication, authenticated callback
+client context, raw GetFriends5 with options.fetch_names enabled on every page,
+bounded parsing, local opt-in BattleTag display, and connection closure. No
+explicit session lifecycle or social mutation was needed for this snapshot.
