@@ -17,7 +17,7 @@ public final class NativeGameAccounts {
             }
         }
     }
-    private enum ReplyKind { case native, friends, sessionDiagnostic }
+    private enum ReplyKind { case native, friends, sessionDiagnostic, applicationCredential }
     private typealias W = BGSWire
     private var recordsDiagnostics = false
     private var inspectsAuthenticationContext = false
@@ -90,6 +90,20 @@ public final class NativeGameAccounts {
             }
             return try await operation()
         } onCancel: { Task { @MainActor in self.cancel() } }
+    }
+
+    /// Experimental issuance-only control. "App" comes from a historical desktop
+    /// client reference, not a claim of current entitlement. Discards the token:
+    /// no target authentication, friends call, session API or persistent write.
+    public func applicationCredentialPreflight(token: LoginToken, build: UInt64, region: Region) async throws {
+        try await authenticated(token: token, build: build, region: region) {
+            let response = try await call(hash: 0xc02f8216, method: 3,
+                body: W.number(1, 0x417070), replyKind: .applicationCredential)
+            let data = try W.data(W.decode(response), 1)
+            guard data.count <= 256, let text = String(data: data, encoding: .utf8),
+                  let candidate = LoginToken(text) else { throw ApplicationCredentialFailure.format }
+            guard candidate.accountID == String(expectedOwner) else { throw Failure.owner }
+        }
     }
 
     public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
@@ -282,6 +296,7 @@ public final class NativeGameAccounts {
                     case .friends: throw FriendSnapshotFailure.requestRejected(status)
                     case .sessionDiagnostic: throw SessionDiagnosticRefusal.response(status)
                     case .native: throw Failure.rejected(status)
+                    case .applicationCredential: throw ApplicationCredentialFailure.refused(status)
                     }
                 }
                 if inspectsAuthenticationContext, hash == 0xc02f8216, method == 1 {
@@ -392,4 +407,9 @@ private final class TLSAccountTransport: NativeAccountTransport {
             }
         }
     }
+}
+
+/// Only the issuance RPC uses this error; auth failures keep their own stage.
+public enum ApplicationCredentialFailure: Error {
+    case refused(UInt64), format
 }

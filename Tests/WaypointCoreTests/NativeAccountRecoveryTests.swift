@@ -430,3 +430,52 @@ private func authenticatedContextReplies(logonID: String? = "synthetic-authentic
     #expect(try BGSWire.uint(h, 11) == 0x7b37d770); #expect(try BGSWire.uint(h, 2) == 5)
     #expect(packet.dropFirst(2 + length).isEmpty)
 }
+
+@Test @MainActor func applicationPreflightOnlyRequestsMatchingOwnerCredentialThenCloses() async throws {
+    let response = BGSWire.text(1, "US-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-123")
+    let transport = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: response)]).reduce(Data(), +))
+    try await NativeGameAccounts(transport: transport).applicationCredentialPreflight(token: accountTestToken, build: 70938, region: .us)
+    #expect(transport.cancelled)
+    #expect(transport.written.count == 3) // Connect, WoW logon, issuance; nothing else.
+    let packet = try #require(transport.written.last), prefix = [UInt8](packet.prefix(2))
+    let length = Int(prefix[0]) * 256 + Int(prefix[1])
+    let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+    #expect(try BGSWire.uint(header, 11) == 0xc02f8216)
+    #expect(try BGSWire.uint(header, 2) == 3)
+    let body = try BGSWire.decode(Data(packet.dropFirst(2 + length)))
+    #expect(try BGSWire.uint(body, 1) == 0x417070)
+    #expect(body.count == 1)
+}
+
+@Test @MainActor func applicationPreflightRejectsWrongOwnerBeforeIssuance() async {
+    let transport = AccountTestTransport(Array(accountReplies(owner: 999).prefix(3)).reduce(Data(), +))
+    do {
+        try await NativeGameAccounts(transport: transport).applicationCredentialPreflight(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Wrong owner accepted")
+    } catch NativeGameAccounts.Failure.owner { #expect(transport.written.count == 2); #expect(transport.cancelled) }
+    catch { Issue.record("Expected owner rejection") }
+}
+
+@Test @MainActor func applicationPreflightRejectsMalformedAndWrongOwnerIssuedCredentials() async {
+    for text in ["US-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-999", "not a credential", String(repeating: "x", count: 257)] {
+        let transport = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: BGSWire.text(1, text))]).reduce(Data(), +))
+        do {
+            try await NativeGameAccounts(transport: transport).applicationCredentialPreflight(token: accountTestToken, build: 70938, region: .us)
+            Issue.record("Unverified credential accepted")
+        } catch NativeGameAccounts.Failure.owner { #expect(text.hasSuffix("999")) }
+        catch ApplicationCredentialFailure.format { #expect(!text.hasSuffix("999")) }
+        catch { Issue.record("Expected typed credential failure") }
+        #expect(transport.written.count == 3); #expect(transport.cancelled)
+    }
+}
+
+@Test @MainActor func applicationPreflightLabelsIssuanceRefusalSeparately() async {
+    let h = BGSWire.number(1, 254) + BGSWire.number(3, 2) + BGSWire.number(5, 0) + BGSWire.number(6, 3025)
+    let rejected = Data([UInt8(h.count >> 8), UInt8(h.count & 255)]) + h
+    let transport = AccountTestTransport((Array(accountReplies().prefix(3)) + [rejected]).reduce(Data(), +))
+    do {
+        try await NativeGameAccounts(transport: transport).applicationCredentialPreflight(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Refused issuance succeeded")
+    } catch ApplicationCredentialFailure.refused(let code) { #expect(code == 3025); #expect(transport.cancelled) }
+    catch { Issue.record("Issuance refusal mislabeled as authentication") }
+}

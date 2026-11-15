@@ -359,3 +359,35 @@ On2026-11-14 the user asked to preserve this as a side project and return to the
 mainline client. Stop live work here. See docs/social-service/PARKED.md for the
 restart boundary. No CreateSession experiment was implemented or run. Do not
 merge this experimental branch into main as part of returning to the client.
+
+## Application credential issuance preflight (version 0.0.14)
+
+Resumed 2026-11-15. This mode changes the current UI from the historical session
+query to a credential-issuance experiment; it is not a read-only RPC. It first
+performs the existing owner-verified WoW authentication, then sends v2
+AuthenticationService.GenerateAuthToken (original hash 0xc02f8216, method 3)
+with title_id 0x417070 (`App`). The credential is bounded, parsed, owner-checked
+and discarded in the backend. It never reaches the UI, Keychain or filesystem.
+No App login, friends request, Create/Restore/DestroySession, presence update or
+friendship/message mutation follows. Saved authorization/preferences are not
+written. Normal authentication/token issuance can have server-side effects.
+
+Provenance: the method and request/response fields appear in the preserved
+client-17987 metadata and the personal mainline already uses this v2 method
+for cross-game credentials. `App` is historical desktop program evidence from
+[EionRobb/purple-battlenet](https://github.com/EionRobb/purple-battlenet/blob/d2113e28cdad24317e34886c50e8a6fceaeff53d/libbattlenet.c);
+its numeric FourCC and current acceptance are a hypothesis, not a supported
+third-party desktop entitlement. No GPL implementation is imported and no old
+user agent/version/device identifier is copied.
+
+A matching-owner credential response would establish issuance for the request,
+not actual title scope, desktop authentication or social permission. Refusal
+is labeled separately from authentication. No automatic retry is made.
+
+34 native/probe tests pass, including exact three-request lifetime, fixed title
+and method, invalid/oversized/wrong-owner returned credentials and wrong owner
+before issuance. Existing native transport/discovery/social checks also pass.
+Independent review found no blocking issues; the UI title was corrected to avoid
+calling issuance read-only. Explicit confirmation that Blizzard games on both
+Macs are closed is required before the live attempt; the local process check
+only detects WoW. Live result is recorded separately after testing.
