@@ -277,8 +277,14 @@ public final class NativeGameAccounts {
             region: region, applicationClient: NativeGameAccounts(), samplePresence: true)
     }
 
+    /// Local opt-in viewer; rows are returned only after verified destruction.
+    public func applicationFriendsPresenceViewer(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws -> ApplicationSessionTestReport {
+        try await applicationSessionLifecycleTest(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts(), samplePresence: true, fetchPresenceNames: true)
+    }
+
     func applicationSessionLifecycleTest(token: LoginToken, build: UInt64, applicationBuild: UInt64,
-                                        region: Region, applicationClient: NativeGameAccounts, samplePresence: Bool = false) async throws -> ApplicationSessionTestReport {
+                                        region: Region, applicationClient: NativeGameAccounts, samplePresence: Bool = false, fetchPresenceNames: Bool = false) async throws -> ApplicationSessionTestReport {
         guard applicationBuild > 0 else { throw ApplicationSessionTestFailure.unavailable }
         let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
         try Task.checkCancellation()
@@ -291,6 +297,8 @@ public final class NativeGameAccounts {
             guard let record = applicationClient.applicationLogonRecord,
                   let context = applicationClient.logonNotificationClientID else { throw ApplicationSessionTestFailure.unavailable }
             let lifecycle = try ApplicationSessionLifecycle(owner: applicationClient.expectedOwner, record: record, context: context)
+            var rows: [FriendPresenceRow] = []
+            var presenceComplete = false
             var presenceSummary: PresenceQuerySummary?
             var presenceStatus = "Not requested"
             applicationClient.sessionLifecycle = lifecycle
@@ -307,10 +315,12 @@ public final class NativeGameAccounts {
                 }
                 if samplePresence {
                     presenceStatus = "Friends lookup did not complete"
-                    let friends = try await applicationClient.readFriends(protocolVersion: .authenticatedContext, fetchNames: false)
+                    let friends = try await applicationClient.readFriends(protocolVersion: .authenticatedContext, fetchNames: fetchPresenceNames)
                     var summary = PresenceQuerySummary()
                     presenceStatus = "Presence query did not complete"
-                    for friend in friends.prefix(3) {
+                    let samplingDeadline = ContinuousClock.now.advanced(by: .seconds(20))
+                    for friend in friends.prefix(fetchPresenceNames ? 64 : 3) {
+                        if ContinuousClock.now >= samplingDeadline { break }
                         try Task.checkCancellation()
                         guard lifecycle.confirmed, !lifecycle.report.destructionCallbackVerified,
                               let id = UInt64(friend.id), id > 0 else { throw ApplicationSessionTestFailure.identity }
@@ -319,6 +329,10 @@ public final class NativeGameAccounts {
                                 body: PresenceDiagnosticPage.desktopAccountRequest(friendID: id), replyKind: .presenceQuery)
                             let page = try PresenceDiagnosticPage.decode(reply, expectedFriend: id)
                             summary.sampledFriends += 1; summary.states += page.states
+                            if fetchPresenceNames {
+                                rows.append(FriendPresenceRow(battleTag: friend.battleTag, status: page.availabilityLabel,
+                                    games: page.onlineGameTitles.sorted(), activity: page.onlineGameHandles > 0 ? page.activity : nil))
+                            }
                             summary.fieldKinds.formUnion(page.fieldKinds); summary.gameTitles.formUnion(page.gameTitles)
                             summary.onlineGameHandles += page.onlineGameHandles
                             for (label, count) in page.selectedStatusCounts { summary.selectedStatusCounts[label, default: 0] += count }
@@ -327,6 +341,7 @@ public final class NativeGameAccounts {
                             throw PresenceQueryFailure.refused(code)
                         }
                     }
+                    presenceComplete = summary.sampledFriends == friends.count
                     presenceSummary = summary
                     presenceStatus = friends.isEmpty ? "Friends list empty; no presence query sent" : "Presence sample succeeded"
                 }
@@ -349,6 +364,10 @@ public final class NativeGameAccounts {
                 }
             }
             var report = lifecycle.report
+            if lifecycle.report.destroyRequestAccepted && lifecycle.report.destructionCallbackVerified,
+               presenceSummary != nil, !Task.isCancelled {
+                report.friendPresenceRows = rows; report.presenceComplete = presenceComplete
+            }
             report.presenceSummary = presenceSummary; report.presenceStatus = presenceStatus
             return report
         }

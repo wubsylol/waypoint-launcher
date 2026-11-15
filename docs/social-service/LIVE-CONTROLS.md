@@ -286,3 +286,18 @@ IDs. Report only field types, fixed selected-status-code aggregate counts,
 validated online-handle count and allowlisted game titles. IDs, activity text,
 online timestamps and selected handles are discarded. Do not equate selected
 status preference with actual online state without online-handle evidence.
+
+## Availability/game control6 (2026-11-15)
+
+Three sampled friends/states succeeded: field20 and21 blobs, field22 unsigned.
+Selected status counts: code0 two, code2 one. One validated online game handle,
+with title outside our prior allowlist (Other game). No field25 text returned.
+All creation/context/destruction checks passed, including destruction callback.
+No private identifiers or activity text displayed/saved.
+
+Viewer7 plan: read names with existing fetch_names option, cap64 friends with
+20-second between-request admission budget in existing35-second App deadline. Derive offline
+only from a present, empty online-handle list; otherwise map selected codes2/3
+to Away/Busy for local user verification. Other statuses remain conservative.
+Expose BattleTag/status/public title/activity only behind Show Friends and after
+verified cleanup, never log/persist/export. No real IDs displayed. Main unchanged.

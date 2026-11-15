@@ -1,7 +1,9 @@
 import Foundation
 
-/// Only fixed labels and booleans cross the lifecycle test's public boundary.
+/// Diagnostics are aggregate-only; opt-in viewer rows remain in memory for local display.
 public struct ApplicationSessionTestReport: Sendable {
+    public var friendPresenceRows: [FriendPresenceRow] = []
+    public var presenceComplete = false
     public var presenceSummary: PresenceQuerySummary?
     public var presenceStatus = "Not requested"
     public var creationResponseVerified = false

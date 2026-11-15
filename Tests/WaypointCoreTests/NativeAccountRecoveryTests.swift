@@ -1099,3 +1099,44 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
     }
 
 }
+
+@Test func presenceAvailabilityRequiresOnlineEvidence() {
+    var sample = PresenceQuerySummary()
+    #expect(sample.availabilityLabel == "Status unavailable")
+    sample.onlineGameListPresent = true; sample.selectedStatus = 2
+    #expect(sample.availabilityLabel == "Offline")
+    sample.onlineGameHandles = 1
+    #expect(sample.availabilityLabel == "Away")
+    sample.selectedStatus = 3
+    #expect(sample.availabilityLabel == "Busy")
+    sample.selectedStatus = 99
+    #expect(sample.availabilityLabel == "Online (status unavailable)")
+}
+
+@Test @MainActor func appLifecycleViewerExportsRowsOnlyAfterVerifiedCleanup() async throws {
+    for cleanup in [true, false] {
+        let source = AccountTestTransport(applicationIssuanceReplies())
+        let key = BGSWire.number(1, 0x424e) + BGSWire.number(2, 1) + BGSWire.number(3, 20)
+        let state = BGSWire.bytes(1, BGSWire.number(1, 42) + BGSWire.bytes(3,
+            BGSWire.bytes(1, key) + BGSWire.bytes(2, BGSWire.bytes(5, Data()))))
+        var replies = appLifecycleAuthReplies() + [accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity())),
+            appLifecycleNotification(1), accountFrame(token: 3, body: friendPage(42, tag: "Synthetic#1234")),
+            accountFrame(token: 4, body: state), accountFrame(token: 5)]
+        if cleanup { replies.append(appLifecycleNotification(2)) }
+        let target = AccountTestTransport(replies.reduce(Data(), +), stall: !cleanup)
+        let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us,
+            applicationClient: NativeGameAccounts(transport: target, timeout: .milliseconds(60)),
+            samplePresence: true, fetchPresenceNames: true)
+        #expect(report.friendPresenceRows.count == (cleanup ? 1 : 0))
+        if cleanup {
+            #expect(report.friendPresenceRows.first?.battleTag == "Synthetic#1234")
+            #expect(report.friendPresenceRows.first?.status == "Offline")
+            #expect(report.presenceComplete)
+        }
+        #expect(target.written.count == 6 && target.cancelled)
+        let packet = target.written[3], length = Int(packet[0]) * 256 + Int(packet[1])
+        let request = try BGSWire.decode(Data(packet.dropFirst(2 + length)))
+        #expect(try BGSWire.uint(BGSWire.decode(BGSWire.data(request, 1)), 1) == 1)
+    }
+}

@@ -127,3 +127,16 @@ keys20/21/22/25 cover online handles/selected game/status/rich presence. Return
 only aggregate types, counts and public game labels; text and identifiers stay
 private and are discarded. Same bounded session and fully verified cleanup.
 Selected status is not itself proof a friend is online.
+
+## Local presence viewer7 (prepared, not run)
+
+Control6 retrieved online handles and selected status. Viewer7 requests names
+with the already-tested fetch_names option and caps sampling at64 friends with a20s between-request admission budget,
+within the existing35s deadline (an admitted request can extend beyond20s). Rows are available only after fully verified
+destruction, never persisted, and hidden until Show Friends. Missing fields stay
+unavailable; empty online list is offline; nonempty list is online with optional
+selected Away/Busy preference. User must verify labels locally before production
+claims. Activity25 is bounded2048 UTF-8 bytes without control characters; displayed
+only locally. Unknown printable title codes are shown as title codes, never account
+identifiers. Snapshot discarded on cancellation or owner change, checked at display, activation, window focus and a one-second in-memory-row ownership monitor.
+71 targeted checks pass, including no private rows after unconfirmed cleanup.
