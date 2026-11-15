@@ -200,3 +200,18 @@ and requests same-context destruction, with explicit unconfirmed-cleanup states.
 See tools/session-lifecycle-probe/README.md. Explicit risk consent and closed
 clients on both Macs are required before running it. The working friends
 viewer and mainline launcher remain separate and unchanged.
+
+## App session lifecycle test1 (2026-11-15)
+
+After explicit consent and confirmation that Blizzard games and official launchers
+were closed on both Macs, the user ran the single-attempt probe. Observed report:
+creation response owner/binding verified; creation callback verified; instance
+matched authentication context; Destroy request accepted; no matching destruction
+callback observed; no refusal code reported. Saved login unchanged.
+
+Source inspection confirms this version returns immediately after the Destroy RPC
+acknowledgment, then closes the connection. It does not wait for a later destruction
+notification. Therefore callback absence is inconclusive, rather than evidence of
+server cleanup failure. The acknowledged request is verified; a matching destruction
+event and final server-side state are not. Do not reconnect or blindly retry cleanup.
+No presence query or message was made. Mainline remains unchanged.
