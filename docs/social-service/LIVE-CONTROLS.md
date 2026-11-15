@@ -177,3 +177,12 @@ Earlier existing-session status7 controls were authenticated as WoW. Since App
 authentication changed friends-service access, repeating this distinct session
 query under the working App identity is useful before considering any lifecycle
 mutation. No Create/Restore/DestroySession call is implemented by this control.
+
+## Existing App-session check3 (2026-11-15)
+
+User reported GetSessionState under App authentication returned7; owner-verified
+session identity remained unknown. No Create/Restore/DestroySession request was
+sent. This extends the earlier WoW-authenticated session-state refusals to the
+working App identity; it does not prove absence of a session or that explicit
+creation will resolve presence. Stop field-argument variations here and seek
+SDK lifecycle/routing evidence before another live attempt.

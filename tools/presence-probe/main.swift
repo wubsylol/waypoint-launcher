@@ -13,13 +13,13 @@ import WaypointCore
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 500),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Presence — Application Session Check 3"
+        window.title = "Waypoint Presence — Application Handle Check 4"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        let title = NSTextField(labelWithString: "Application session — existing-state check")
+        let title = NSTextField(labelWithString: "Application login — handle availability check")
         title.font = .systemFont(ofSize: 18, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Close Blizzard games on both Macs first. Uses a temporary App credential and owner-verified application login, then queries existing session state with the authenticated client context. No friends/presence lookup, subscriptions, messages, presence updates or Create/Restore/DestroySession requests. Shows only query status and whether an owner-verified session identity was returned. A refusal leaves session existence unknown.")
-        button = NSButton(title: "Inspect existing App session", target: self, action: #selector(check))
+        let explanation = NSTextField(wrappingLabelWithString: "Close Blizzard games on both Macs first. Uses a temporary App credential and owner-verified application login, then classifies optional game-account handle metadata from that login. No requests follow App authentication: no friends, presence, session query, creation, restoration or destruction. Shows only whether a unique Americas App handle and authenticated context were supplied; no identifiers or private values are displayed or saved.")
+        button = NSButton(title: "Inspect App login metadata", target: self, action: #selector(check))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel))
         let actions = NSStackView(views: [button, cancel, NSView()])
         actions.spacing = 12
@@ -64,7 +64,7 @@ import WaypointCore
               let token = TokenVault(service: "io.wubs.waypoint-review: Battle.net login tokens").token(account: account.id, codename: "WoW"),
               token.accountID == account.id else { status.stringValue = "No matching saved WoW login. No connection made."; return }
         button.isEnabled = false
-        status.stringValue = "Checking public build metadata, then querying existing App session state…"
+        status.stringValue = "Checking public build metadata, then inspecting optional App login metadata…"
         task = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -86,22 +86,21 @@ import WaypointCore
                       game.buildID > 0, app.buildID > 0, game.region == "us", app.region == "us" else {
                     self.status.stringValue = "Account/game state or metadata changed. No connection made."; return
                 }
-                let report = try await NativeGameAccounts().applicationSessionPreflight(token: token,
+                let report = try await NativeGameAccounts().applicationHandlePreflight(token: token,
                     build: UInt64(game.buildID), applicationBuild: UInt64(app.buildID), region: .us)
                 try Task.checkCancellation()
                 guard AccountList.load(from: self.defaults).activeID == account.id else {
                     self.status.stringValue = "Account changed; result discarded."; return
                 }
-                let present = report.serverSessionIDPresent.map { $0 ? "yes" : "no" } ?? "unknown"
-                self.output.string = "Existing App-session query status: \(report.sessionQueryStatus)\nOwner-verified session identity returned: \(present)\n\nNo session creation, restoration or destruction requested."
-                self.status.stringValue = "App session-state check complete. Both connections closed; saved login unchanged."
+                self.output.string = "Owner-verified App authentication succeeded.\nHandle classification: \(report.state.rawValue)\nAuthenticated callback context present: \(report.authenticatedContextPresent ? "yes" : "no")\n\nNo request was made after App login. Both connections closed."
+                self.status.stringValue = "App handle check complete. Saved login unchanged."
             } catch is CancellationError { self.status.stringValue = "Cancelled. Saved login unchanged." }
             catch let failure as SessionDiagnosticFailure { self.status.stringValue = failure.localizedDescription + " Saved login unchanged." }
             catch ApplicationCredentialFailure.refused(let code) { self.status.stringValue = "Application credential request refused (\(code)). Saved login unchanged." }
-            catch AuthenticationContextFailure.missingClientID { self.status.stringValue = "No authenticated client context; no session-state query sent." }
-            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Authentication refused (\(code)); session-state check not completed. Saved login unchanged." }
+            catch AuthenticationContextFailure.missingClientID { self.status.stringValue = "No authenticated client context; no post-login request sent." }
+            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Authentication refused (\(code)); App metadata check not completed. Saved login unchanged." }
             catch NativeGameAccounts.Failure.owner { self.status.stringValue = "Account/session owner mismatch. Result discarded; saved login unchanged." }
-            catch { self.status.stringValue = "App session-state check could not complete. Saved login unchanged." }
+            catch { self.status.stringValue = "App handle check could not complete. Saved login unchanged." }
         }
     }
 

@@ -1,6 +1,6 @@
 # Presence/session investigation probes
 
-Current UI: Existing App-session control3. Earlier presence query controls below
+Current UI: Authenticated App-handle availability control4. Earlier presence query controls below
 are historical; see the final section for the current request scope.
 
 Experimental social branch only; not part of live Waypoint. Build with
@@ -92,3 +92,18 @@ Refusal leaves presence unknown, never “no session exists.” A returned ident
 must match the authenticated owner.51 targeted tests pass, including the exact
 App-control dispatch, empty query body, client-context source, refusal semantics
 and wrong-owner response. Live outcome pending.
+
+## Authenticated App-handle availability control4
+
+App GetSessionState control3 also returned7/unknown. Static inspection of the
+public current desktop core found a populated game-account handle in its login
+CreateSessionRequest path. See DESKTOP-LIFECYCLE-17986.md for bounded evidence
+and the important limits on that inference.
+
+Control4 sends no request after App authentication. It classifies optional
+owner-verified LogonRecord.game_account2 metadata, bounded to100 entries of128
+bytes each. Only explicit nonzero IDs with App title/region1 count as matching;
+multiple matches are ambiguous and malformed optional metadata is unrecognized,
+not failed login. The UI exposes fixed classification/context-presence only,
+never IDs, handles, names or raw values. Nothing is saved. No session creation
+is implemented.53 targeted checks pass; native app builds. Live outcome pending.

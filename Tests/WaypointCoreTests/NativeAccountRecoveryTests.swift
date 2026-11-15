@@ -779,3 +779,31 @@ private func presencePage(friend: UInt64, title: UInt64 = 0x576f57) -> Data {
     } catch NativeGameAccounts.Failure.owner { #expect(source.cancelled && target.cancelled) }
     catch { Issue.record("Expected session-owner validation failure") }
 }
+
+@Test func applicationHandleMetadataClassifiesOnlyBoundedExplicitAppHandles() {
+    func entry(_ id: UInt64, title: UInt64 = 0x417070, region: UInt64 = 1) -> BGSWire.Value {
+        .bytes(BGSWire.number(1, id) + BGSWire.number(2, title) + BGSWire.number(3, region))
+    }
+    #expect(ApplicationHandleMetadata.classify([:]) == .missing)
+    #expect(ApplicationHandleMetadata.classify([2: [entry(456)]]) == .matching)
+    #expect(ApplicationHandleMetadata.classify([2: [entry(456, title: 0x576f57)]]) == .other)
+    #expect(ApplicationHandleMetadata.classify([2: [entry(456, region: 2)]]) == .other)
+    #expect(ApplicationHandleMetadata.classify([2: [entry(456), entry(789)]]) == .ambiguous)
+    #expect(ApplicationHandleMetadata.classify([2: [.number(3)]]) == .unrecognized)
+    #expect(ApplicationHandleMetadata.classify([2: [entry(0)]]) == .unrecognized)
+    #expect(ApplicationHandleMetadata.classify([2: Array(repeating: entry(456), count: 101)]) == .unrecognized)
+}
+
+@Test @MainActor func applicationHandleCheckOnlyAuthenticatesAndReportsClassification() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let handle = BGSWire.number(1, 456) + BGSWire.number(2, 0x417070) + BGSWire.number(3, 1)
+    let record = BGSWire.number(1, 123) + BGSWire.bytes(2, handle)
+    let targetReplies = [accountFrame(token: 0), accountFrame(token: 1),
+        accountFrame(token: 99, body: BGSWire.bytes(2, record), service: 0, method: 1, hash: 0x9da8116b, clientID: "synthetic-app-context")]
+    let target = AccountTestTransport(targetReplies.reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: source).applicationHandlePreflight(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(report.state == .matching && report.authenticatedContextPresent)
+    #expect(source.cancelled && target.cancelled)
+    #expect(source.written.count == 3 && target.written.count == 2)
+}

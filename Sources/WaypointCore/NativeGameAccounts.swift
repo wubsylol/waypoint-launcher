@@ -20,6 +20,8 @@ public final class NativeGameAccounts {
     private enum ReplyKind { case native, friends, sessionDiagnostic, applicationCredential, presenceQuery }
     private typealias W = BGSWire
     private var recordsDiagnostics = false
+    private var inspectsApplicationHandle = false
+    private var applicationHandleState: ApplicationHandleState = .missing
     private var inspectsAuthenticationContext = false
     private var usesAuthenticatedClientID = false
     private var authenticationReplyHasClientID = false
@@ -228,6 +230,31 @@ public final class NativeGameAccounts {
         do {
             return try await applicationClient.sessionDiagnostics(token: candidate, build: applicationBuild, region: region,
                 includeConnectionIdentity: false, useAuthenticatedClientID: true, titleID: 0x417070)
+        } catch {
+            try Task.checkCancellation()
+            throw error
+        }
+    }
+
+    /// Auth-only metadata control; no session/friends/presence call follows login.
+    public func applicationHandlePreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws -> ApplicationHandleDiagnostics {
+        try await applicationHandlePreflight(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts())
+    }
+
+    func applicationHandlePreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64,
+                                     region: Region, applicationClient: NativeGameAccounts) async throws -> ApplicationHandleDiagnostics {
+        guard applicationBuild > 0 else { throw ApplicationAuthenticationFailure.unavailable }
+        let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
+        try Task.checkCancellation()
+        applicationClient.inspectsAuthenticationContext = true
+        applicationClient.inspectsApplicationHandle = true
+        do {
+            return try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+                titleID: 0x417070) {
+                ApplicationHandleDiagnostics(state: applicationClient.applicationHandleState,
+                    authenticatedContextPresent: applicationClient.logonNotificationClientID != nil)
+            }
         } catch {
             try Task.checkCancellation()
             throw error
@@ -470,6 +497,7 @@ public final class NativeGameAccounts {
             guard status == 0 else { throw Failure.rejected(status) }
             let record = try W.decode(W.data(message, 2))
             guard try W.uint(record, 1) == expectedOwner else { throw Failure.owner }
+            if inspectsApplicationHandle { applicationHandleState = ApplicationHandleMetadata.classify(record) }
             if recordsDiagnostics {
                 // Desktop schema names are only hypotheses for this game reply.
                 // Observe optional metadata instead of enforcing its wire type.
