@@ -1,4 +1,10 @@
-# Read-only Battle.net friends experiment
+# Battle.net friends experiment
+
+Current mode: version0.0.16, application-authenticated count-only friends
+preflight (button: Test application friends access). First live result:45
+records returned; names, presence and completeness remain unverified. The
+older modes below are historical. Current mode includes temporary credential
+issuance and is not accurately described as entirely read-only.
 
 Branch: `experiment/battlenet-friends`. Do not merge or push this experiment to
 `main`. This is a bounded social-read probe, not a supported social/chat client.

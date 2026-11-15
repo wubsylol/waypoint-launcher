@@ -1,5 +1,10 @@
 # Parked Battle.net social prototype
 
+**Resumed at the user’s request on 2026-11-15.** See RESUMED.md and the latest
+LIVE-CONTROLS.md entries: App authentication and a count-only45-record friends
+lookup have now succeeded. The parked state below is historical, not current.
+Social experiments remain separate from mainline.
+
 Parked2026-11-14 at the user’s request. Resume only on a new user request.
 
 Source branch: `experiment/battlenet-friends` in `wubsylol/waypoint-launcher`.

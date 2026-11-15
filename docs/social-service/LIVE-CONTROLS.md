@@ -95,3 +95,28 @@ completed version-15 window was subsequently observed showing the same result.
 This establishes acceptance of this App authentication control, not friends
 permission or explicit application-session lifecycle. No friends request,
 subscription or explicit Create/Restore/DestroySession was sent in version15.
+
+## First successful friends response — version 0.0.16 (2026-11-15)
+
+The user started the application-authenticated friends check. When inspected,
+the button was already disabled and status was pending; no additional click or
+retry was sent. The completed version-16 window was observed reporting a
+successful application-authenticated friends response with45 records. The user
+independently reported the same result. No names or IDs were displayed/captured.
+Both source and target connections closed; no saved credentials were written.
+
+Working tested sequence: owner-verified WoW authentication → GenerateAuthToken
+for App → close source → authenticate the fresh credential as App with public
+bna build/Mc64 → raw v2 GetFriends5 using owner-verified logon client context →
+bounded parsing → close. No explicit session lifecycle or subscription request
+was needed for this lookup. This establishes successful access and45 parsed
+records for the selected account, not expected friend-name correctness,
+completeness against the official list, presence, live updates, messaging,
+credential lifetime or game/launcher coexistence. It does not isolate which
+individual application-login parameter caused earlier refusals to disappear.
+
+Next: show the returned BattleTags only in a local opt-in viewer so the user
+can validate expected friends without exporting a list. Then investigate
+presence/ongoing refresh independently. Keep all social work off personal main
+until explicitly promoted. Messaging, read/typing signals and friendship
+mutations remain outside this read experiment.
