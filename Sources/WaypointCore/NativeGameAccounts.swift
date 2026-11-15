@@ -17,7 +17,7 @@ public final class NativeGameAccounts {
             }
         }
     }
-    private enum ReplyKind { case native, friends, sessionDiagnostic, applicationCredential }
+    private enum ReplyKind { case native, friends, sessionDiagnostic, applicationCredential, presenceQuery }
     private typealias W = BGSWire
     private var recordsDiagnostics = false
     private var inspectsAuthenticationContext = false
@@ -167,6 +167,53 @@ public final class NativeGameAccounts {
         }
     }
 
+    /// Samples up to three IDs from this connection's freshly verified friends
+    /// list, querying a fixed presence-key allowlist. No names/values are exposed.
+    public func applicationPresencePreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws -> PresenceQuerySummary {
+        try await applicationPresencePreflight(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts())
+    }
+
+    func applicationPresencePreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64,
+                                      region: Region, applicationClient: NativeGameAccounts) async throws -> PresenceQuerySummary {
+        guard applicationBuild > 0 else { throw ApplicationAuthenticationFailure.unavailable }
+        let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
+        try Task.checkCancellation()
+        applicationClient.recordsDiagnostics = true
+        applicationClient.inspectsAuthenticationContext = true
+        applicationClient.usesAuthenticatedClientID = true
+        do {
+            return try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+                titleID: 0x417070) {
+                let friends = try await applicationClient.readFriends(protocolVersion: .authenticatedContext, fetchNames: false)
+                var summary = PresenceQuerySummary()
+                for friend in friends.prefix(3) {
+                    try Task.checkCancellation()
+                    guard let id = UInt64(friend.id), id > 0 else { throw PresenceQueryFailure.identity }
+                    let reply = try await applicationClient.call(hash: 0x138d200c, method: 5,
+                        body: PresenceDiagnosticPage.request(friendID: id), replyKind: .presenceQuery)
+                    let page = try PresenceDiagnosticPage.decode(reply, expectedFriend: id)
+                    summary.sampledFriends += 1
+                    summary.states += page.states
+                    summary.fieldKinds.formUnion(page.fieldKinds)
+                    summary.gameTitles.formUnion(page.gameTitles)
+                }
+                return summary
+            }
+        } catch {
+            try Task.checkCancellation()
+            switch error {
+            case is CancellationError: throw CancellationError()
+            case let presence as PresenceQueryFailure: throw presence
+            case let friends as FriendSnapshotFailure: throw friends
+            case let context as AuthenticationContextFailure: throw context
+            case Failure.rejected(let code): throw ApplicationAuthenticationFailure.refused(code)
+            case Failure.owner: throw ApplicationAuthenticationFailure.owner
+            default: throw ApplicationAuthenticationFailure.unavailable
+            }
+        }
+    }
+
     public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
         try await authenticated(token: token, build: build, region: region) {
             let owner = expectedOwner
@@ -215,41 +262,46 @@ public final class NativeGameAccounts {
         }
         if includeConnectionIdentity { recordsDiagnostics = true; includesConnectionIdentity = true }
         return try await authenticated(token: token, build: build, region: region, titleID: titleID) {
-            if recordsDiagnostics { diagnosticStage = .friendsQuery }
-            if protocolVersion == .legacySubscription {
-                // Connection-scoped listener object 1. The initial subscription
-                // response contains the list in field 5; close immediately after
-                // parsing it. Never keep a social subscription in the launcher.
-                let response = try await call(hash: 0xa3ddb1bd, method: 1, body: W.number(2, 1), replyKind: .friends)
-                return try LegacyFriendSnapshot.decode(response, friendsField: 5)
-            }
-            if protocolVersion == .legacy {
-                let response = try await call(hash: 0xa3ddb1bd, method: 13, replyKind: .friends)
-                return try LegacyFriendSnapshot.decode(response)
-            }
-            var result: [BattleNetFriend] = [], seenIDs = Set<String>(), continuations = Set<UInt64>()
-            var continuation: UInt64 = 0
-            for _ in 0..<20 {
-                // GetFriendsOptions.fetch_names is false/omitted in the ID-only control.
-                var request = fetchNames ? W.bytes(1, W.number(1, 1)) : Data()
-                if continuation != 0 { request += W.number(2, continuation) }
-                // Explicit control: only the method's client-call bit changes.
-                let method: UInt64 = protocolVersion == .currentClientCall ? 0x40000005 : 5
-                let response = try await call(hash: 0x5869be8c, method: method, body: request, replyKind: .friends)
-                let page = try FriendSnapshotPage.decode(response)
-                for friend in page.friends {
-                    guard seenIDs.insert(friend.id).inserted, result.count < 1000 else { throw Failure.unavailable }
-                    result.append(friend)
-                }
-                guard let next = page.continuation, next != 0 else {
-                    return result.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
-                }
-                guard continuations.insert(next).inserted else { throw Failure.unavailable }
-                continuation = next
-            }
-            throw Failure.unavailable
+            try await readFriends(protocolVersion: protocolVersion, fetchNames: fetchNames)
         }
     }
+
+    private func readFriends(protocolVersion: FriendSnapshotProtocol, fetchNames: Bool) async throws -> [BattleNetFriend] {
+        if recordsDiagnostics { diagnosticStage = .friendsQuery }
+        if protocolVersion == .legacySubscription {
+            // Connection-scoped listener object 1. The initial subscription
+            // response contains the list in field 5; close immediately after
+            // parsing it. Never keep a social subscription in the launcher.
+            let response = try await call(hash: 0xa3ddb1bd, method: 1, body: W.number(2, 1), replyKind: .friends)
+            return try LegacyFriendSnapshot.decode(response, friendsField: 5)
+        }
+        if protocolVersion == .legacy {
+            let response = try await call(hash: 0xa3ddb1bd, method: 13, replyKind: .friends)
+            return try LegacyFriendSnapshot.decode(response)
+        }
+        var result: [BattleNetFriend] = [], seenIDs = Set<String>(), continuations = Set<UInt64>()
+        var continuation: UInt64 = 0
+        for _ in 0..<20 {
+            // GetFriendsOptions.fetch_names is false/omitted in the ID-only control.
+            var request = fetchNames ? W.bytes(1, W.number(1, 1)) : Data()
+            if continuation != 0 { request += W.number(2, continuation) }
+            // Explicit control: only the method's client-call bit changes.
+            let method: UInt64 = protocolVersion == .currentClientCall ? 0x40000005 : 5
+            let response = try await call(hash: 0x5869be8c, method: method, body: request, replyKind: .friends)
+            let page = try FriendSnapshotPage.decode(response)
+            for friend in page.friends {
+                guard seenIDs.insert(friend.id).inserted, result.count < 1000 else { throw Failure.unavailable }
+                result.append(friend)
+            }
+            guard let next = page.continuation, next != 0 else {
+                return result.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+            }
+            guard continuations.insert(next).inserted else { throw Failure.unavailable }
+            continuation = next
+        }
+        throw Failure.unavailable
+    }
+
     /// Read-only connection metadata plus GetSessionState. Sends no session
     /// creation, restoration, destruction or mark-alive request.
     public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region, includeConnectionIdentity: Bool = false, useAuthenticatedClientID: Bool = false) async throws -> NativeSessionDiagnostics {
@@ -339,7 +391,7 @@ public final class NativeGameAccounts {
     private func call(hash: UInt32, method: UInt64, body: Data = Data(), replyKind: ReplyKind = .native) async throws -> Data {
         let token = sequence; sequence += 1
         var clientID: String?
-        if (replyKind == .friends || replyKind == .sessionDiagnostic), usesAuthenticatedClientID {
+        if (replyKind == .friends || replyKind == .sessionDiagnostic || replyKind == .presenceQuery), usesAuthenticatedClientID {
             guard loggedIn, let rawIdentity = logonNotificationClientID,
                   let identity = String(data: rawIdentity, encoding: .utf8),
                   !identity.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
@@ -356,7 +408,7 @@ public final class NativeGameAccounts {
             let (header, response) = try await receive()
             if try W.uint(header, 1) == 254 {
                 guard try W.uint(header, 3) == token else { throw Failure.unavailable }
-                if (replyKind == .friends || replyKind == .sessionDiagnostic), usesAuthenticatedClientID, header[13] != nil {
+                if (replyKind == .friends || replyKind == .sessionDiagnostic || replyKind == .presenceQuery), usesAuthenticatedClientID, header[13] != nil {
                     guard boundedHeaderClientID(header) == logonNotificationClientID else { throw Failure.owner }
                 }
                 let status = try W.uint(header, 6, default: 0)
@@ -366,6 +418,7 @@ public final class NativeGameAccounts {
                     case .sessionDiagnostic: throw SessionDiagnosticRefusal.response(status)
                     case .native: throw Failure.rejected(status)
                     case .applicationCredential: throw ApplicationCredentialFailure.refused(status)
+                    case .presenceQuery: throw PresenceQueryFailure.refused(status)
                     }
                 }
                 if inspectsAuthenticationContext, hash == 0xc02f8216, method == 1 {

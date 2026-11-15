@@ -634,3 +634,95 @@ private func applicationIssuanceReplies() -> Data {
         else { #expect(body[2] == nil) }
     }
 }
+
+private func presencePage(friend: UInt64, title: UInt64 = 0x576f57) -> Data {
+    let key = BGSWire.number(1, 0x424e) + BGSWire.number(2, 1) + BGSWire.number(3, 13) + BGSWire.number(4, 987654321)
+    let field = BGSWire.bytes(1, key) + BGSWire.bytes(2, BGSWire.number(6, 1))
+    let unrequested = BGSWire.bytes(1, BGSWire.number(1, 0x424e) + BGSWire.number(2, 1) + BGSWire.number(3, 1))
+        + BGSWire.bytes(2, BGSWire.text(4, "Synthetic private real name"))
+    let handle = BGSWire.number(1, 888888888) + BGSWire.number(2, title) + BGSWire.number(3, 1)
+    return BGSWire.bytes(1, BGSWire.number(1, friend) + BGSWire.bytes(2, handle)
+        + BGSWire.bytes(3, field) + BGSWire.bytes(3, unrequested))
+}
+
+@Test func presenceDiagnosticRequestOnlyIncludesFixedAllowlistAndGameQueryScope() throws {
+    let body = try BGSWire.decode(PresenceDiagnosticPage.request(friendID: 42))
+    #expect(try BGSWire.uint(body, 1) == 42)
+    #expect(try BGSWire.uint(body, 2) == 2)
+    let keys = try #require(body[3])
+    #expect(keys.count == 4 && body.count == 3)
+    for (index, value) in keys.enumerated() {
+        guard case .bytes(let bytes) = value else { Issue.record("Non-message key"); return }
+        let key = try BGSWire.decode(bytes), expected = PresenceDiagnosticPage.keys[index]
+        #expect(try BGSWire.uint(key, 1) == expected.0)
+        #expect(try BGSWire.uint(key, 2) == expected.1)
+        #expect(try BGSWire.uint(key, 3) == expected.2)
+        #expect(key.count == 3) // No unique/account identifiers in key metadata.
+    }
+}
+
+@Test func presenceDiagnosticDiscardsIdentitiesAndValuesAndRejectsWrongFriend() throws {
+    let report = try PresenceDiagnosticPage.decode(presencePage(friend: 42), expectedFriend: 42)
+    #expect(report.states == 1)
+    #expect(report.gameTitles == ["World of Warcraft"])
+    #expect(report.fieldKinds == ["BN 1/13: unsigned integer"])
+    #expect(throws: (any Error).self) { try PresenceDiagnosticPage.decode(presencePage(friend: 43), expectedFriend: 42) }
+    #expect(try PresenceDiagnosticPage.decode(Data(), expectedFriend: 42).fieldKinds.isEmpty)
+    let tooMany = (0..<65).map { _ in BGSWire.bytes(1, BGSWire.number(1, 42)) }.reduce(Data(), +)
+    #expect(throws: (any Error).self) { try PresenceDiagnosticPage.decode(tooMany, expectedFriend: 42) }
+}
+
+@Test @MainActor func applicationPresenceSamplesOnlyThreeCurrentFriendsWithVerifiedContext() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let roster = [42,43,44,45].map { BGSWire.bytes(1, BGSWire.number(1, UInt64($0))) }.reduce(Data(), +)
+    var replies = Array(authenticatedContextReplies().prefix(3)) + [accountFrame(token: 2, body: roster)]
+    for (index, id) in [42,43,44].enumerated() { replies.append(accountFrame(token: UInt64(index + 3), body: presencePage(friend: UInt64(id)))) }
+    let target = AccountTestTransport(replies.reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: source).applicationPresencePreflight(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(report.sampledFriends == 3 && report.states == 3)
+    #expect(source.cancelled && target.cancelled)
+    #expect(source.written.count == 3 && target.written.count == 6)
+    let rosterRequest = target.written[2], rosterHeaderLength = Int(rosterRequest[0]) * 256 + Int(rosterRequest[1])
+    #expect(rosterRequest.dropFirst(2 + rosterHeaderLength).isEmpty) // No names requested.
+    for packet in target.written.dropFirst(3) {
+        let length = Int(packet[0]) * 256 + Int(packet[1])
+        let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+        let body = try BGSWire.decode(Data(packet.dropFirst(2 + length)))
+        #expect(try BGSWire.uint(header, 11) == 0x138d200c)
+        #expect(try BGSWire.uint(header, 2) == 5)
+        #expect(try BGSWire.data(header, 13) == Data("synthetic-authenticated-id".utf8))
+        #expect([42,43,44].contains(try BGSWire.uint(body, 1)))
+    }
+}
+
+@Test @MainActor func applicationPresenceRefusalStopsWithoutFallback() async {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let h = BGSWire.number(1, 254) + BGSWire.number(3, 3) + BGSWire.number(5, 0) + BGSWire.number(6, 3025)
+    let refused = Data([UInt8(h.count >> 8), UInt8(h.count & 255)]) + h
+    let target = AccountTestTransport(authenticatedContextReplies().reduce(Data(), +) + refused)
+    do {
+        _ = try await NativeGameAccounts(transport: source).applicationPresencePreflight(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Refused presence succeeded")
+    } catch PresenceQueryFailure.refused(let code) { #expect(code == 3025) }
+    catch { Issue.record("Presence refusal mislabeled") }
+    #expect(source.cancelled && target.cancelled)
+    #expect(target.written.count == 4)
+}
+
+@Test @MainActor func applicationPresenceCancellationClosesPendingQuery() async {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport(authenticatedContextReplies().reduce(Data(), +), stall: true)
+    target.cancellationReturnsUnavailable = true
+    let task = Task {
+        try await NativeGameAccounts(transport: source).applicationPresencePreflight(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    }
+    while target.pending == nil { await Task.yield() }
+    task.cancel()
+    do { _ = try await task.value; Issue.record("Cancelled presence succeeded") }
+    catch is CancellationError { #expect(source.cancelled && target.cancelled) }
+    catch { Issue.record("Cancelled query mislabeled") }
+    #expect(target.written.count == 4)
+}

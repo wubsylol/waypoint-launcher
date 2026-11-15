@@ -1,0 +1,639 @@
+{
+  "source": "Installed Forever static universal executable; first matching embedded descriptor",
+  "binarySHA256": "4bd27e0e22a9fe6c98b233c78d2e01c9dd44606bee19122df0452183ad0ac208",
+  "binaryBytes": 124944640,
+  "files": [
+    {
+      "file": "bgs/low/pb/client/api/client/v2/presence_types.proto",
+      "offset": "0x385f830",
+      "bytes": 1940,
+      "package": "bgs.protocol.presence.v2",
+      "messages": [
+        {
+          "name": "RichPresenceKey",
+          "fields": [
+            {
+              "name": "title_id",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "stream",
+              "number": 2,
+              "label": 1,
+              "type": 7,
+              "typeName": null
+            },
+            {
+              "name": "localization_id",
+              "number": 3,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "PresenceFieldKey",
+          "fields": [
+            {
+              "name": "title_id",
+              "number": 1,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "group",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "field",
+              "number": 3,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "unique_id",
+              "number": 4,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "PresenceField",
+          "fields": [
+            {
+              "name": "key",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldKey"
+            },
+            {
+              "name": "value",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Variant"
+            },
+            {
+              "name": "deleted",
+              "number": 3,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "updated_time_us",
+              "number": 4,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "PresenceFieldState",
+          "fields": [
+            {
+              "name": "account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "game_account",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.account.v2.GameAccountHandle"
+            },
+            {
+              "name": "fields",
+              "number": 3,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceField"
+            },
+            {
+              "name": "oldest_time_us",
+              "number": 4,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "PresenceFieldUpdate",
+          "fields": [
+            {
+              "name": "key",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldKey"
+            },
+            {
+              "name": "value",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Variant"
+            },
+            {
+              "name": "delete",
+              "number": 3,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "PresenceOnlineGameAccount",
+          "fields": [
+            {
+              "name": "game_account",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.account.v2.GameAccountHandle"
+            },
+            {
+              "name": "online_time_us",
+              "number": 2,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "PresenceOnlineGameAccountFieldValue",
+          "fields": [
+            {
+              "name": "online_game_accounts",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceOnlineGameAccount"
+            }
+          ]
+        },
+        {
+          "name": "PresenceExternalIdentityFieldValue",
+          "fields": [
+            {
+              "name": "unique_id",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "display_id",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "LocalizedStringMapEntry",
+          "fields": [
+            {
+              "name": "locale",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "value",
+              "number": 2,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "LocalizedStringMap",
+          "fields": [
+            {
+              "name": "default_string",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "localized_entry",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.LocalizedStringMapEntry"
+            }
+          ]
+        },
+        {
+          "name": "RichPresenceParty",
+          "fields": [
+            {
+              "name": "id",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "current_size",
+              "number": 2,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            },
+            {
+              "name": "max_size",
+              "number": 3,
+              "label": 1,
+              "type": 13,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "RichPresenceDetails",
+          "fields": [
+            {
+              "name": "state",
+              "number": 1,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.LocalizedStringMap"
+            },
+            {
+              "name": "party",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.RichPresenceParty"
+            },
+            {
+              "name": "large_image_url",
+              "number": 3,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "small_image_url",
+              "number": 4,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            }
+          ]
+        }
+      ],
+      "enums": [
+        {
+          "name": "PresenceQueryBehavior",
+          "values": [
+            {
+              "name": "BATTLE_NET_ACCOUNT_ONLY",
+              "number": 0
+            },
+            {
+              "name": "INCLUDE_SAME_GAME_ACCOUNT",
+              "number": 1
+            },
+            {
+              "name": "INCLUDE_ALL_GAME_ACCOUNTS",
+              "number": 2
+            }
+          ]
+        },
+        {
+          "name": "PresenceAccountStatus",
+          "values": [
+            {
+              "name": "OFFLINE",
+              "number": 0
+            },
+            {
+              "name": "ONLINE",
+              "number": 1
+            },
+            {
+              "name": "AWAY",
+              "number": 2
+            },
+            {
+              "name": "DND",
+              "number": 3
+            }
+          ]
+        }
+      ],
+      "services": []
+    },
+    {
+      "file": "bgs/low/pb/client/api/client/v2/presence_service.proto",
+      "offset": "0x385ef90",
+      "bytes": 1466,
+      "package": "bgs.protocol.presence.v2.client",
+      "messages": [
+        {
+          "name": "BatchSubscribeRequest",
+          "fields": [
+            {
+              "name": "account_ids",
+              "number": 1,
+              "label": 3,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "BatchUnsubscribeRequest",
+          "fields": [
+            {
+              "name": "account_ids",
+              "number": 1,
+              "label": 3,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "QueryRequest",
+          "fields": [
+            {
+              "name": "account_id",
+              "number": 1,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            },
+            {
+              "name": "query_behavior",
+              "number": 2,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.presence.v2.PresenceQueryBehavior"
+            },
+            {
+              "name": "keys",
+              "number": 3,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldKey"
+            },
+            {
+              "name": "since_us",
+              "number": 4,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "QueryResponse",
+          "fields": [
+            {
+              "name": "states",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldState"
+            }
+          ]
+        },
+        {
+          "name": "UpdateRequest",
+          "fields": [
+            {
+              "name": "updates",
+              "number": 1,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.presence.v2.PresenceFieldUpdate"
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": [
+        {
+          "name": "PresenceService",
+          "options": [
+            {
+              "extension": 90000,
+              "numericFields": {
+                "9": [
+                  1
+                ]
+              }
+            },
+            {
+              "extension": 90001,
+              "numericFields": {
+                "2": [
+                  1
+                ],
+                "3": [
+                  1
+                ]
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "BatchSubscribe",
+              "input": ".bgs.protocol.presence.v2.client.BatchSubscribeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      3
+                    ],
+                    "2": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "BatchUnsubscribe",
+              "input": ".bgs.protocol.presence.v2.client.BatchUnsubscribeRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      4
+                    ],
+                    "2": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Query",
+              "input": ".bgs.protocol.presence.v2.client.QueryRequest",
+              "output": ".bgs.protocol.presence.v2.client.QueryResponse",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      5
+                    ],
+                    "2": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update",
+              "input": ".bgs.protocol.presence.v2.client.UpdateRequest",
+              "output": ".bgs.protocol.NoData",
+              "options": [
+                {
+                  "extension": 90000,
+                  "numericFields": {
+                    "1": [
+                      6
+                    ],
+                    "2": [
+                      3
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "bgs/low/pb/client/api/common/v2/attribute_types.proto",
+      "offset": "0x3864cb0",
+      "bytes": 505,
+      "package": "bgs.protocol.v2",
+      "messages": [
+        {
+          "name": "Variant",
+          "fields": [
+            {
+              "name": "bool_value",
+              "number": 1,
+              "label": 1,
+              "type": 8,
+              "typeName": null
+            },
+            {
+              "name": "int_value",
+              "number": 2,
+              "label": 1,
+              "type": 3,
+              "typeName": null
+            },
+            {
+              "name": "float_value",
+              "number": 3,
+              "label": 1,
+              "type": 1,
+              "typeName": null
+            },
+            {
+              "name": "string_value",
+              "number": 4,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "blob_value",
+              "number": 5,
+              "label": 1,
+              "type": 12,
+              "typeName": null
+            },
+            {
+              "name": "uint_value",
+              "number": 6,
+              "label": 1,
+              "type": 4,
+              "typeName": null
+            }
+          ]
+        },
+        {
+          "name": "Attribute",
+          "fields": [
+            {
+              "name": "name",
+              "number": 1,
+              "label": 1,
+              "type": 9,
+              "typeName": null
+            },
+            {
+              "name": "value",
+              "number": 2,
+              "label": 1,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Variant"
+            }
+          ]
+        },
+        {
+          "name": "AttributeFilter",
+          "fields": [
+            {
+              "name": "op",
+              "number": 1,
+              "label": 1,
+              "type": 14,
+              "typeName": ".bgs.protocol.v2.AttributeFilter.Operation"
+            },
+            {
+              "name": "attribute",
+              "number": 2,
+              "label": 3,
+              "type": 11,
+              "typeName": ".bgs.protocol.v2.Attribute"
+            }
+          ]
+        }
+      ],
+      "enums": [],
+      "services": []
+    }
+  ]
+}
