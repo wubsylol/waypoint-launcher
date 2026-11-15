@@ -301,3 +301,11 @@ only from a present, empty online-handle list; otherwise map selected codes2/3
 to Away/Busy for local user verification. Other statuses remain conservative.
 Expose BattleTag/status/public title/activity only behind Show Friends and after
 verified cleanup, never log/persist/export. No real IDs displayed. Main unchanged.
+
+## Local presence viewer7 verification (2026-11-15)
+
+User explicitly confirmed that statuses and games look correct in the local
+viewer. No BattleTags/activity/IDs were shared. This validates the displayed
+snapshot labels on the tested account; it does not establish continuous updates,
+reconnect behavior, all-account coverage or messaging. Full-roster vs partial
+completion was not separately reported. Source remains experiment-only.
