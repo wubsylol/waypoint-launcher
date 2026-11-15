@@ -246,3 +246,16 @@ destructor0x168b4e0, validates the constructor/copy/destructor family. Our
 previous sample used behavior2 INCLUDE_ALL_GAME_ACCOUNTS. Next controlled test
 uses the desktop account-only behavior0, keeping session/header/keys unchanged.
 This is a bounded format alignment, not an attempt to override server refusal.
+
+## Account-only control4 (2026-11-15)
+
+Presence refused7, with verified creation and fully verified destruction. No
+sample returned. Keep this negative result; behavior0 alone is insufficient.
+
+Further inert core inspection finds account-key helper0x71a230 and two-key
+construction0x719de1...0x719e22: title loaded from constant0x23af300 (0x424e),
+group1, fields4 and13, hasbits0x7 (title/group/field), unique_id absent. This
+validates title BN and supplies a concrete desktop key shape. The earlier sample
+mixed group1 fields13/3 and group2 fields1/8. Control5 will use only the two
+observed desktop keys and omit unique_id, preserving behavior0/session/context.
+No status semantic is inferred from those numbers alone.

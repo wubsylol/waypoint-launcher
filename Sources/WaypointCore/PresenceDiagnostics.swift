@@ -28,6 +28,17 @@ enum PresenceDiagnosticPage {
         return body
     }
 
+    /// Current desktop builds these account keys with title/group/field present,
+    /// and leaves unique_id absent (core17986 0x719de1...0x719e22).
+    static let desktopAccountKeys: [(UInt64, UInt64, UInt64)] = [(0x424e, 1, 4), (0x424e, 1, 13)]
+    static func desktopAccountRequest(friendID: UInt64) -> Data {
+        var body = BGSWire.number(1, friendID) + BGSWire.number(2, 0)
+        for (title, group, field) in desktopAccountKeys {
+            body += BGSWire.bytes(3, BGSWire.number(1, title) + BGSWire.number(2, group) + BGSWire.number(3, field))
+        }
+        return body
+    }
+
     static func decode(_ data: Data, expectedFriend: UInt64) throws -> PresenceQuerySummary {
         typealias W = BGSWire
         let response = try W.decode(data), states = response[1] ?? []
@@ -50,7 +61,7 @@ enum PresenceDiagnosticPage {
                 guard case .bytes(let raw) = value else { throw PresenceQueryFailure.malformed }
                 let entry = try W.decode(raw), key = try W.decode(W.data(entry, 1))
                 let title = try W.uint(key, 1), group = try W.uint(key, 2), field = try W.uint(key, 3)
-                guard keys.contains(where: { $0.0 == title && $0.1 == group && $0.2 == field }) else { continue }
+                guard (keys + desktopAccountKeys).contains(where: { $0.0 == title && $0.1 == group && $0.2 == field }) else { continue }
                 if try W.uint(entry, 3, default: 0) == 1 {
                     result.fieldKinds.insert("BN \(group)/\(field): deleted")
                     continue

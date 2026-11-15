@@ -1063,3 +1063,18 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
     let original = try BGSWire.decode(PresenceDiagnosticPage.request(friendID: 42))
     #expect(try BGSWire.uint(original, 2) == 2)
 }
+
+@Test func presenceDesktopAccountKeysMatchStaticConstruction() throws {
+    let request = try BGSWire.decode(PresenceDiagnosticPage.desktopAccountRequest(friendID: 42))
+    #expect(try BGSWire.uint(request, 2) == 0)
+    let values = request[3] ?? []
+    #expect(values.count == 2)
+    for (index, value) in values.enumerated() {
+        guard case .bytes(let raw) = value else { Issue.record("Non-message key"); return }
+        let key = try BGSWire.decode(raw)
+        #expect(try BGSWire.uint(key, 1) == 0x424e)
+        #expect(try BGSWire.uint(key, 2) == 1)
+        #expect(try BGSWire.uint(key, 3) == [4,13][index])
+        #expect(key[4] == nil && key.count == 3)
+    }
+}

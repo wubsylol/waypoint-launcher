@@ -113,3 +113,9 @@ The original pre-session probe retains behavior2. Same keys, authenticated heade
 friend cap and verified lifecycle. See LIVE-CONTROLS for static address evidence.
 67 targeted tests pass. No expansion into subscription, status publication or
 messaging. Live outcome remains untested.
+
+## Desktop account fields control5 (prepared, not run)
+
+Control4 refused7 with verified cleanup. Use only desktop-observed BN1/4 and
+BN1/13 keys, with absent unique_id as constructed in core17986. Same behavior0,
+three-ID cap and lifecycle. Aggregate kinds only, no semantic status claim yet.
