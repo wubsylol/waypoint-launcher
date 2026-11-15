@@ -18,6 +18,7 @@ public final class NativeGameAccounts {
         }
     }
     private enum ReplyKind { case native, friends, sessionDiagnostic, applicationCredential, presenceQuery, sessionLifecycle }
+    public private(set) var authenticatedProfile: NativeAccountProfile?
     private typealias W = BGSWire
     private var recordsDiagnostics = false
     private var inspectsApplicationHandle = false
@@ -51,7 +52,7 @@ public final class NativeGameAccounts {
         self.transport = transport; self.timeout = timeout
     }
     public func cancel() { closed = true; transport.cancel() }
-    private func authenticated<T>(token: LoginToken, build: UInt64, region: Region, titleID: UInt64 = 0x576f57, operation: () async throws -> T) async throws -> T {
+    private func withAuthenticatedSession<T>(token: LoginToken, build: UInt64, region: Region, titleID: UInt64 = 0x576f57, platform: String = "Mc64", operation: () async throws -> T) async throws -> T {
         guard region == .us else { throw Failure.unsupported }
         guard let owner = UInt64(token.accountID), owner > 0, build > 0 else { throw Failure.owner }
         expectedOwner = owner
@@ -85,7 +86,7 @@ public final class NativeGameAccounts {
                     connectionIdentity = identity // In memory only; never displayed/logged.
                 }
             }
-            let request = W.number(1, titleID) + W.text(2, "Mc64") + W.text(3, "enUS")
+            let request = W.number(1, titleID) + W.text(2, platform) + W.text(3, "enUS")
                 + W.number(4, build) + W.bytes(10, W.text(1, token.value))
             if recordsDiagnostics { diagnosticStage = .authentication }
             _ = try await call(hash: 0xc02f8216, method: 1, body: request)
@@ -94,7 +95,7 @@ public final class NativeGameAccounts {
                 try notification(header, body)
             }
             return try await operation()
-        } onCancel: { Task { @MainActor in self.cancel() } }
+        } onCancel: { [weak self] in Task { @MainActor in self?.cancel() } }
     }
 
     /// Experimental issuance-only control. "App" comes from a historical desktop
@@ -105,7 +106,7 @@ public final class NativeGameAccounts {
     }
 
     private func issueApplicationCredential(token: LoginToken, build: UInt64, region: Region) async throws -> LoginToken {
-        try await authenticated(token: token, build: build, region: region) {
+        try await withAuthenticatedSession(token: token, build: build, region: region) {
             let response = try await call(hash: 0xc02f8216, method: 3,
                 body: W.number(1, 0x417070), replyKind: .applicationCredential)
             let data = try W.data(W.decode(response), 1)
@@ -130,7 +131,7 @@ public final class NativeGameAccounts {
         let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
         try Task.checkCancellation()
         do {
-            try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+            try await applicationClient.withAuthenticatedSession(token: candidate, build: applicationBuild, region: region,
                 titleID: 0x417070, operation: {})
         } catch {
             // NWConnection cancellation may surface as a transport error.
@@ -188,7 +189,7 @@ public final class NativeGameAccounts {
         applicationClient.inspectsAuthenticationContext = true
         applicationClient.usesAuthenticatedClientID = true
         do {
-            return try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+            return try await applicationClient.withAuthenticatedSession(token: candidate, build: applicationBuild, region: region,
                 titleID: 0x417070) {
                 let friends = try await applicationClient.readFriends(protocolVersion: .authenticatedContext, fetchNames: false)
                 var summary = PresenceQuerySummary()
@@ -253,7 +254,7 @@ public final class NativeGameAccounts {
         applicationClient.inspectsAuthenticationContext = true
         applicationClient.inspectsApplicationHandle = true
         do {
-            return try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+            return try await applicationClient.withAuthenticatedSession(token: candidate, build: applicationBuild, region: region,
                 titleID: 0x417070) {
                 ApplicationHandleDiagnostics(state: applicationClient.applicationHandleState,
                     authenticatedContextPresent: applicationClient.logonNotificationClientID != nil)
@@ -292,7 +293,7 @@ public final class NativeGameAccounts {
         applicationClient.usesAuthenticatedClientID = true
         applicationClient.inspectsApplicationHandle = true
         applicationClient.capturesApplicationHandle = true
-        return try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+        return try await applicationClient.withAuthenticatedSession(token: candidate, build: applicationBuild, region: region,
             titleID: 0x417070) {
             guard let record = applicationClient.applicationLogonRecord,
                   let context = applicationClient.logonNotificationClientID else { throw ApplicationSessionTestFailure.unavailable }
@@ -388,8 +389,57 @@ public final class NativeGameAccounts {
         }
     }
 
+    /// Retrieves only the verified identity; no licence/social/session RPCs.
+    public func fetchProfile(token: LoginToken, build: UInt64, region: Region) async throws -> NativeAccountProfile {
+        try await withAuthenticatedSession(token: token, build: build, region: region) {
+            guard let profile = authenticatedProfile else { throw Failure.unavailable }
+            return profile
+        }
+    }
+
+    /// Owner-verified v2 GenerateAuthToken request for supported cross-game sign-in.
+    /// Schema/method verified against installed Forever static descriptors.
+    public enum CredentialTarget: Sendable {
+        case worldOfWarcraft, diabloIV, hearthstone
+        var titleID: UInt64 {
+            switch self { case .worldOfWarcraft: 0x576f57; case .diabloIV: 0x46656e; case .hearthstone: 0x57544347 }
+        }
+        public var displayName: String {
+            switch self { case .worldOfWarcraft: "World of Warcraft"; case .diabloIV: "Diablo IV"; case .hearthstone: "Hearthstone" }
+        }
+        public var codename: String {
+            switch self { case .worldOfWarcraft: "WoW"; case .diabloIV: "Fen"; case .hearthstone: "WTCG" }
+        }
+        public var productCode: String {
+            switch self { case .worldOfWarcraft: "wowf"; case .diabloIV: "fenris"; case .hearthstone: "hsb" }
+        }
+        var platform: String { self == .diabloIV ? "Wn64" : "Mc64" }
+        /// Only these cross-game routes have been enabled and validated.
+        public init?(sharedCodename: String) {
+            switch sharedCodename { case "Fen": self = .diabloIV; case "WTCG": self = .hearthstone; default: return nil }
+        }
+    }
+    public func requestCredential(token: LoginToken, build: UInt64, region: Region,
+                                  target: CredentialTarget = .diabloIV) async throws -> LoginToken {
+        try await withAuthenticatedSession(token: token, build: build, region: region) {
+            let response = try await call(hash: 0xc02f8216, method: 3, body: W.number(1, target.titleID))
+            let data = try W.data(W.decode(response), 1)
+            guard data.count <= 256, let text = String(data: data, encoding: .utf8),
+                  let issued = LoginToken(text), issued.accountID == String(expectedOwner) else { throw Failure.owner }
+            return issued
+        }
+    }
+
+    /// Isolated target-service acceptance check; no game licence/session selection.
+    public func validateCredential(token: LoginToken, build: UInt64, region: Region, target: CredentialTarget) async throws {
+        try await withAuthenticatedSession(token: token, build: build, region: region,
+                                           titleID: target.titleID, platform: target.platform) {
+            guard authenticatedProfile?.accountID == token.accountID else { throw Failure.owner }
+        }
+    }
+
     public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
-        try await authenticated(token: token, build: build, region: region) {
+        try await withAuthenticatedSession(token: token, build: build, region: region) {
             let owner = expectedOwner
             let body = try await call(hash: 0x22dc2464, method: 108)
             let links = try W.decode(W.data(W.decode(body), 1))[1] ?? []
@@ -435,7 +485,7 @@ public final class NativeGameAccounts {
             usesAuthenticatedClientID = true
         }
         if includeConnectionIdentity { recordsDiagnostics = true; includesConnectionIdentity = true }
-        return try await authenticated(token: token, build: build, region: region, titleID: titleID) {
+        return try await withAuthenticatedSession(token: token, build: build, region: region, titleID: titleID) {
             try await readFriends(protocolVersion: protocolVersion, fetchNames: fetchNames)
         }
     }
@@ -492,7 +542,7 @@ public final class NativeGameAccounts {
         includesConnectionIdentity = includeConnectionIdentity
         if useAuthenticatedClientID { inspectsAuthenticationContext = true; usesAuthenticatedClientID = true }
         do {
-            return try await authenticated(token: token, build: build, region: region, titleID: titleID) {
+            return try await withAuthenticatedSession(token: token, build: build, region: region, titleID: titleID) {
                 do {
                     diagnosticStage = .query
                     let reply = try await call(hash: 0x7b37d770, method: 5, replyKind: .sessionDiagnostic)
@@ -523,7 +573,7 @@ public final class NativeGameAccounts {
     public func authenticationContextDiagnostics(token: LoginToken, build: UInt64, region: Region) async throws -> AuthenticationContextDiagnostics {
         recordsDiagnostics = true
         inspectsAuthenticationContext = true
-        return try await authenticated(token: token, build: build, region: region) {
+        return try await withAuthenticatedSession(token: token, build: build, region: region) {
             let match: Bool?
             if let reply = authenticationReplyClientID, let logon = logonNotificationClientID { match = reply == logon }
             else { match = nil }
@@ -659,6 +709,7 @@ public final class NativeGameAccounts {
                 logonNotificationHasClientID = header[13] != nil
                 logonNotificationClientID = boundedHeaderClientID(header)
             }
+            authenticatedProfile = NativeAccountProfile(accountID: String(expectedOwner), record: record)
             loggedIn = true
         case 2:
             let state = try W.decode(W.data(W.decode(body), 1))

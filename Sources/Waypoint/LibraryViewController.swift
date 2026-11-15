@@ -79,7 +79,7 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
     private let appUpdater: AppUpdater
     private var rows: [Row] = []
 
-    private let table = NSTableView()
+    private let table = LibraryTableView()
     private let scrollView = NSScrollView()
     private let emptyState = NSStackView()
     private let emptyInstallButton = NSPopUpButton(frame: .zero, pullsDown: true)
@@ -102,6 +102,8 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
+        // macOS 15 added display-mode customization independently of item customization.
+        if #available(macOS 15.0, *) { toolbar.allowsDisplayModeCustomization = false }
         return toolbar
     }()
 
@@ -124,6 +126,15 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
         table.selectionHighlightStyle = .none
         table.dataSource = self
         table.delegate = self
+        // Installed games can be dragged into another order.
+        table.allowsRowDrag = { [weak self] indexes in
+            guard let self else { return false }
+            return LibraryDragRules.canStart(rows: indexes, installedCount: gameRowCount)
+        }
+        table.registerForDraggedTypes([.libraryGame])
+        table.setDraggingSourceOperationMask(.move, forLocal: true)
+        table.setDraggingSourceOperationMask([], forLocal: false)
+        table.draggingDestinationFeedbackStyle = .gap
         scrollView.documentView = table
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
@@ -422,6 +433,57 @@ final class LibraryViewController: NSViewController, NSTableViewDataSource, NSTa
 
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
+    // MARK: Reordering
+
+    /// Installed games lead the list; drags start and land among them only.
+    private var gameRowCount: Int {
+        rows.prefix { if case .game(let state) = $0 { state.canReorder } else { false } }.count
+    }
+
+    private var installedDragIDs: Set<String> {
+        Set(rows.prefix(gameRowCount).compactMap { if case .game(let state) = $0 { state.game.install.uid } else { nil } })
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession,
+                   endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        // Let AppKit finish its gap/drag-image cleanup, then recreate row views.
+        // A cancelled or rejected drop must not leave a source row blank.
+        Task { @MainActor [weak self] in self?.table.reloadData() }
+    }
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> (any NSPasteboardWriting)? {
+        guard row >= 0, row < gameRowCount, case .game(let state) = rows[row] else { return nil }
+        let item = NSPasteboardItem()
+        item.setString(state.game.install.uid, forType: .libraryGame)
+        return item
+    }
+
+    func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int,
+                   proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        guard info.draggingSource as? NSTableView === table,
+              let id = info.draggingPasteboard.string(forType: .libraryGame),
+              installedDragIDs.contains(id),
+              let destination = LibraryDragRules.insertionRow(proposed: row, onRow: dropOperation == .on,
+                                                             installedCount: gameRowCount) else { return [] }
+        tableView.setDropRow(destination, dropOperation: .above)
+        return .move
+    }
+
+    func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int,
+                   dropOperation: NSTableView.DropOperation) -> Bool {
+        guard info.draggingSource as? NSTableView === table,
+              dropOperation == .above,
+              LibraryDragRules.insertionRow(proposed: row, onRow: false, installedCount: gameRowCount) != nil,
+              let id = info.draggingPasteboard.string(forType: .libraryGame),
+              installedDragIDs.contains(id) else { return false }
+        let target: String? = if row < gameRowCount, case .game(let state) = rows[row] { state.game.install.uid } else { nil }
+        model.moveGame(id, before: target)
+        // Within the drop, so the row settles into the gap rather than
+        // sliding there after it closes.
+        render()
+        return true
+    }
+
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { false }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -444,4 +506,20 @@ private extension NSToolbarItem.Identifier {
 extension NSMenuItem {
     /// The hidden first item a pull-down menu (NSMenuToolbarItem's) needs.
     static func pullDownPlaceholder() -> NSMenuItem { NSMenuItem(title: "", action: nil, keyEquivalent: "") }
+}
+
+private extension NSPasteboard.PasteboardType {
+    /// A library game being dragged to another place; within Waypoint only.
+    static let libraryGame = NSPasteboard.PasteboardType("dev.waypoint.library-game")
+}
+
+/// NSTableView may start its row-drag UI before asking for a pasteboard writer.
+/// Reject noninstalled sources at that earlier boundary, not just at the drop.
+@MainActor
+private final class LibraryTableView: NSTableView {
+    var allowsRowDrag: ((IndexSet) -> Bool)?
+    override func canDragRows(with rowIndexes: IndexSet, at mouseDownPoint: NSPoint) -> Bool {
+        guard allowsRowDrag?(rowIndexes) == true else { return false }
+        return super.canDragRows(with: rowIndexes, at: mouseDownPoint)
+    }
 }

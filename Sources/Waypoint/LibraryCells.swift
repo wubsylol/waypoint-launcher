@@ -6,12 +6,15 @@ import WaypointCore
 /// re-renders when any of it changes (see `LibraryViewController.render`).
 struct GameRowState {
     var game: Game
+    var canReorder: Bool
     var phase: AppModel.Phase
     var isRunning: Bool
     var update: UpdateCheck?
     var canPlay: Bool
     var canUpdate: Bool
     var showsEdition: Bool
+    var selectedAccountName: String?
+    var displayRegion: String?
     var download: DownloadControls
     /// The game's picture, once it has been downloaded.
     var banner: URL?
@@ -19,10 +22,12 @@ struct GameRowState {
 
 extension GameRowState {
     @MainActor init(_ game: Game, model: AppModel) {
-        self.init(game: game, phase: model.phase(of: game), isRunning: model.isRunning(game),
+        self.init(game: game, canReorder: model.canReorder(game), phase: model.phase(of: game), isRunning: model.isRunning(game),
                   update: model.availableUpdate(for: game), canPlay: model.canPlay(game),
                   canUpdate: model.canUpdate(game), showsEdition: game.install.productCode == "hero" &&
                     (WindowsHeroes.isAvailable || model.heroesEdition(.windows) != nil),
+                  selectedAccountName: model.selectedGameAccountName(for: game),
+                  displayRegion: model.effectiveGameRegion(for: game),
                   download: DownloadControls(uid: game.id, model: model),
                   banner: model.artwork(productCode: game.install.productCode).picture)
     }
@@ -196,7 +201,7 @@ final class GameCell: NSView {
                 detail.stringValue = GameUpdate.canUpdate(game.install) ? "Update available" : "Update available in Battle.net"
                 detail.textColor = .systemOrange
             } else {
-                detail.stringValue = Self.summary(of: game)
+                detail.stringValue = Self.summary(of: game, region: state.displayRegion, account: state.selectedAccountName)
             }
         }
 
@@ -359,14 +364,29 @@ final class GameCell: NSView {
             if model.availableUpdate(for: game) != nil {
                 menu.addItem(ActionItem("Play Without Updating") { Task { await model.play(game) } })
             }
-            if GameCatalog.family(for: game.install.productCode) == .worldOfWarcraft {
-                if let selected = model.selectedGameAccountName(for: game) {
-                    let current = NSMenuItem(title:"Game account: \(selected)", action:nil, keyEquivalent:"")
-                    current.isEnabled = false; menu.addItem(current)
+            if GameCatalog.family(for: game.install.productCode) == .worldOfWarcraft, let owner = model.activeAccount?.id {
+                let item = NSMenuItem(title: "WoW account", action: nil, keyEquivalent: "")
+                let choices = NSMenu(); choices.autoenablesItems = false
+                let accounts = model.knownGameAccounts(for: game)
+                if accounts.isEmpty {
+                    let empty = NSMenuItem(title: "No detected accounts", action: nil, keyEquivalent: "")
+                    empty.isEnabled = false; choices.addItem(empty)
                 }
-                menu.addItem(ActionItem("Select account…", enabled: model.canPlay(game)) {
-                    Task { await model.selectGameAccount(for: game) }
+                let duplicates = Dictionary(grouping: accounts, by: \.name)
+                for account in accounts {
+                    let available = model.isAvailableGameAccount(account, for: game)
+                    let label = duplicates[account.name, default: []].count > 1 ? "\(account.name) (\(account.accountID))" : account.name
+                    let choice = ActionItem(available ? label : "\(label) (unavailable)", enabled: model.canPlay(game) && available) {
+                        model.useGameAccount(account, for: game, owner: owner)
+                    }
+                    choice.state = model.isSelectedGameAccount(account, for: game) ? .on : .off
+                    choices.addItem(choice)
+                }
+                choices.addItem(.separator())
+                choices.addItem(ActionItem("Refresh list", enabled: model.canRefreshGameAccounts(for: game)) {
+                    Task { await model.refreshGameAccounts(for: game, owner: owner) }
                 })
+                item.submenu = choices; menu.addItem(item)
             }
             let others = model.accounts.filter { $0.id != model.activeAccount?.id }
             if !others.isEmpty {
@@ -413,15 +433,15 @@ final class GameCell: NSView {
 
     /// "36.6.3 · EU", plus "Intel" for games that need Rosetta. The full
     /// version is in the name's tooltip.
-    private static func summary(of game: Game) -> String {
+    private static func summary(of game: Game, region: String?, account: String?) -> String {
         var parts: [String] = []
         if let version = game.install.version {
             parts.append(version.split(separator: ".").prefix(3).joined(separator: "."))
         }
-        if let region = game.install.region { parts.append(region.uppercased()) }
+        if let region { parts.append(region.uppercased()) }
+        if let account { parts.append(account) }
         if game.install.platform == .windows {
             parts.append(WindowsTitle.forInstall(game.install)?.compatibilityLabel ?? "Windows")
-            if WindowsTitle.forInstall(game.install)?.isQualified == false { parts.append("Preview") }
         }
         else if game.appURL != nil, !game.runsNatively { parts.append("Intel") }
         return parts.joined(separator: " · ")
@@ -557,14 +577,35 @@ final class AvailableHeaderCell: NSView {
         let title = NSMutableAttributedString(string: " Available Games", attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor])
         title.append(NSAttributedString(string: "  \(count)", attributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor]))
         button.attributedTitle = title
-        button.image = NSImage(systemSymbolName: expanded ? "chevron.down" : "chevron.right", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 9, weight: .bold))
+        button.image = expanded ? Self.chevrons.down : Self.chevrons.right
         button.contentTintColor = .tertiaryLabelColor
         button.setAccessibilityLabel("Available Games, \(count)")
         button.setAccessibilityValue(expanded ? "expanded" : "collapsed")
     }
 
     @objc private func clicked() { toggle?() }
+
+    /// The two chevrons differ in width and height, so each is centered in
+    /// the same square: the title doesn't move when the group opens.
+    private static let chevrons: (right: NSImage?, down: NSImage?) = {
+        let config = NSImage.SymbolConfiguration(pointSize: 9, weight: .bold)
+        let symbols = ["chevron.right", "chevron.down"].map {
+            NSImage(systemSymbolName: $0, accessibilityDescription: nil)?.withSymbolConfiguration(config)
+        }
+        let side = ceil(symbols.compactMap { $0.map { max($0.size.width, $0.size.height) } }.max() ?? 10)
+        let squared = symbols.map { symbol in
+            symbol.map { symbol in
+                let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
+                    symbol.draw(in: NSRect(x: (side - symbol.size.width) / 2, y: (side - symbol.size.height) / 2,
+                                           width: symbol.size.width, height: symbol.size.height))
+                    return true
+                }
+                image.isTemplate = true
+                return image
+            }
+        }
+        return (squared[0], squared[1])
+    }()
 }
 
 /// A game that isn't installed. Smaller and quieter than an installed one: its icon (its initial, without one), its

@@ -6,6 +6,7 @@ import WaypointCore
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate, NSMenuItemValidation {
     let model = AppModel()
     let appUpdater = AppUpdater()
+    let backgroundServices = BackgroundServices()
     private var libraryWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var menuBarItem: MenuBarItem?
@@ -13,6 +14,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     static func main() {
         let app = NSApplication.shared
+        // Preserve this fork’s previous Dark default until a choice is saved.
+        UserDefaults.standard.register(defaults: [AppAppearance.defaultsKey: AppAppearance.Mode.dark.rawValue])
+        AppAppearance.apply()
+        if ProcessInfo.processInfo.environment["WAYPOINT_SHARED_SIGNIN_PROBE"] == "1" {
+            let probe = SharedSignInProbe()
+            app.delegate = probe; app.setActivationPolicy(.regular)
+            withExtendedLifetime(probe) { app.run() }
+            return
+        }
         let delegate = AppDelegate()
         app.delegate = delegate
         // Also makes `swift run` builds, which have no bundle, a regular app.
@@ -21,12 +31,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Capture the hint before any system-service calls. This remains best effort.
+        let loginLaunch = Self.launchedAtLogin
         appUpdater.prepareForRestart = { [weak model] in await model?.prepareToQuit() ?? true }
         NSApp.mainMenu = MainMenu.make(for: self)
         menuBarItem = MenuBarItem(model: model, appUpdater: appUpdater)
-        showLibrary(nil)
+        backgroundServices.openLibrary = { [weak self] in self?.showLibrary(nil) }
+        backgroundServices.openAppUpdate = { [weak self] in self?.showLibrary(nil) }
+        backgroundServices.setLibraryOpen(!loginLaunch)
+        backgroundServices.start(model: model, updater: appUpdater)
+        // The launch marker is best effort. Unknown/manual launches show a window.
+        Log.info(.app, "launch_context", nil, ["login_item_hint": loginLaunch])
+        if !loginLaunch {
+            showLibrary(nil)
+        }
         // How long the launch took, to compare versions and Macs by the logs.
-        Log.info(.app, "library_shown", nil, ["launch_ms": ProcessStart.millisecondsAgo ?? -1, "games": model.games.count])
+        Log.info(.app, "interface_ready", nil, ["launch_ms": ProcessStart.millisecondsAgo ?? -1, "games": model.games.count])
+    }
+
+    private static var launchedAtLogin: Bool {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        return event?.eventID == kAEOpenApplication && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -46,15 +71,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// Sparkle's install-on-quit keep going. Reopening Waypoint (Dock click,
     /// Spotlight, Raycast, `open`) brings the library back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        if !hasVisibleWindows { showLibrary(nil) }
+        showLibrary(nil)
         return true
     }
 
     // MARK: Library window
 
+    /// The status icon toggles only the library window, never the application.
+    /// The red close button uses the same window-close path; background work lives on.
+    @objc func toggleLibrary(_ sender: Any?) {
+        if let window = libraryWindow, window.isVisible, !window.isMiniaturized, !NSApp.isHidden {
+            window.performClose(sender)
+        } else {
+            showLibrary(sender)
+        }
+    }
+
     @objc func showLibrary(_ sender: Any?) {
         let window = libraryWindow ?? makeLibraryWindow()
         libraryWindow = window
+        backgroundServices.setLibraryOpen(true)
+        NSApp.activate(ignoringOtherApps: true)
+        if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -88,17 +126,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc func showSettings(_ sender: Any?) {
-        let window = settingsWindow ?? NSWindow(contentViewController: SettingsViewController(model: model))
+        let window = settingsWindow ?? NSWindow(contentViewController: SettingsViewController(model: model, backgroundServices: backgroundServices))
         window.styleMask = [.titled, .closable]
+        window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
         if settingsWindow == nil { window.center() }
         settingsWindow = window
+        window.delegate = self
+        backgroundServices.setSettingsOpen(true)
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 
     /// A closed library is let go, views and all; reopening builds a new one.
     func windowWillClose(_ notification: Notification) {
-        if notification.object as? NSWindow === libraryWindow { libraryWindow = nil }
+        if notification.object as? NSWindow === libraryWindow {
+            libraryWindow = nil
+            backgroundServices.setLibraryOpen(false)
+        }
+        if notification.object as? NSWindow === settingsWindow {
+            backgroundServices.setSettingsOpen(false)
+        }
     }
 
     // MARK: Commands
@@ -112,6 +160,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc func restartToUpdate(_ sender: Any?) {
         appUpdater.restartToUpdate()
+    }
+
+    @objc func locateInstalledGames(_ sender: Any?) {
+        Task { await model.locateInstalledGames() }
     }
 
     @objc func rescan(_ sender: Any?) {
@@ -158,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         for item in menu.items {
             switch item.action {
             case #selector(checkForUpdates(_:)):
-                item.isHidden = ready != nil || !appUpdater.isEnabled
+                item.isHidden = ready != nil
             case #selector(restartToUpdate(_:)):
                 item.isHidden = ready == nil
                 item.title = "Restart to Update Waypoint \(ready ?? "")"
@@ -178,7 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(checkForUpdates(_:)): appUpdater.canCheck
+        case #selector(checkForUpdates(_:)): true
         case #selector(addAccount(_:)), #selector(signInAgain(_:)), #selector(signOut(_:)): !model.isSigningIn
         default: true
         }

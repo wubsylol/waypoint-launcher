@@ -46,13 +46,13 @@ public final class DownloadQueue {
     }
 
     @discardableResult
-    public func enqueue(_ request: DownloadRequest) throws -> DownloadJob {
+    public func enqueue(_ request: DownloadRequest, keepsMacAwake: Bool = false) throws -> DownloadJob {
         guard jobs[request.key] == nil else { throw DownloadStoreError.alreadyQueued }
         let lease = try store.claim(key: request.key)
         guard !FileManager.default.fileExists(atPath: store.file(for: request.key).path) else {
             throw DownloadStoreError.alreadyQueued
         }
-        let record = UnfinishedDownload(request: request)
+        let record = UnfinishedDownload(request: request, keepsMacAwake: keepsMacAwake)
         try store.save(record) // Must be durable before the first request starts.
         let job = makeJob(record, lease: lease, restoring: false)
         jobs[request.key] = job

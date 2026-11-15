@@ -117,7 +117,9 @@ final class AppModel {
     private(set) var running: Set<String> = []
     /// Game uid -> result of the last update check.
     private(set) var updates: [String: UpdateCheck] = [:]
-    private var lastUpdateCheck: Date?
+    @ObservationIgnored private var updateCheckSchedule = UpdateCheckSchedule()
+    @ObservationIgnored var updateChecked: ((Game, UpdateCheck) -> Void)?
+    @ObservationIgnored var updateCleared: ((String) -> Void)?
 
     /// nil = use the region each game was installed for.
     var regionOverride: Region? {
@@ -144,10 +146,54 @@ final class AppModel {
     private var gameAccountChoices = GameAccountSelections.load() {
         didSet { gameAccountChoices.save() }
     }
+    private var gameAccountCatalogs = GameAccountCatalogs.load() {
+        didSet { gameAccountCatalogs.save() }
+    }
     private var isSelectingGameAccount = false
+    private var isRefreshingNativeProfile = false
     private var profileFetches: Set<String> = []
 
-    private let library = GameLibrary()
+    private var library: GameLibrary {
+        var library = GameLibrary()
+        library.locatedRoots = (UserDefaults.standard.stringArray(forKey: "locatedGameFolders") ?? []).map { URL(fileURLWithPath: $0, isDirectory: true) }
+        return library
+    }
+    private var isLocatingGames = false
+
+    func locateInstalledGames() async {
+        guard !isLocatingGames else { return }
+        isLocatingGames = true
+        defer { isLocatingGames = false }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false; panel.canCreateDirectories = false
+        panel.prompt = "Locate"
+        panel.message = "Choose an installed game’s folder or a folder containing your games. Files will not be moved or downloaded."
+        guard panel.runModal() == .OK, let selection = panel.url else { return }
+        let roots = await Task.detached(priority: .userInitiated) { LocatedGames.roots(at: selection) }.value
+        guard !roots.isEmpty else {
+            let alert = NSAlert(); alert.messageText = "No supported installed games found"
+            alert.informativeText = "Choose the game’s main folder (for WoW, the folder containing Data and the edition folders), or its parent games folder. Existing Battle.net build records and game files are required. Check that your drive is connected and accessible."
+            alert.runModal(); return
+        }
+        let imports = roots.flatMap { LocatedGames.installs(at: $0) }
+        let keys = Set(imports.map(\.key))
+        let folders = Set(imports.map { Self.folderKey($0.installPath) })
+        guard !downloads.values.contains(where: { job in
+                  guard job.state != .completed, let install = job.request?.install else { return false }
+                  return keys.contains(install.key) || folders.contains(Self.folderKey(install.installPath))
+              }),
+              !keys.contains(where: { isBusy(uid: $0) || running.contains($0) }),
+              !games.contains(where: { folders.contains(Self.folderKey($0.install.installPath)) && (isBusy($0) || running.contains($0.id)) }) else {
+            let alert = NSAlert(); alert.messageText = "This game is in use"
+            alert.informativeText = "Close the game and finish or cancel its download before changing its installation location."
+            alert.runModal(); return
+        }
+        var paths = roots.map(\.path)
+        paths += (UserDefaults.standard.stringArray(forKey: "locatedGameFolders") ?? []).filter { !paths.contains($0) }
+        UserDefaults.standard.set(paths, forKey: "locatedGameFolders")
+        reload()
+    }
     private let loginWindow = LoginWindow()
     /// Per bundle id, like the web sessions, so test builds never share
     /// keychain items with the installed app.
@@ -201,22 +247,16 @@ final class AppModel {
             })
         }
         // Coming back to Waypoint picks up games installed or removed
-        // meanwhile, and checks for updates (throttled).
+        // meanwhile. Version checks run only at startup or a game launch.
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.reloadOffMainThread()
-                _ = Task {
-                    // Both go by the games the scan finds.
-                    while let scan = self?.scanOffMainThread { await scan.value }
-                    await self?.refreshCatalog()
-                    await self?.checkForUpdates()
-                }
             }
         })
         Task {
             await refreshCatalog()
-            await checkForUpdates(force: true)
+            await checkForUpdatesAtStartup()
         }
         Task { await setUpAccounts() }
     }
@@ -348,15 +388,38 @@ final class AppModel {
         let selected = heroes.first { $0.id == pendingHeroesInstall?.key }
             ?? heroes.first { $0.install.platform == preferred } ?? heroes.first
         var addedHeroes = false
-        games = all.filter { game in
+        let displayed = all.filter { game in
             guard game.install.uid == "heroes" else { return true }
             guard !addedHeroes, game.id == selected?.id else { return false }
             addedHeroes = true
             return true
         }
+        games = LibraryOrder.sorted(displayed.filter { canReorder($0) }, by: libraryOrder, id: \.install.uid)
+            + displayed.filter { !canReorder($0) }
         refreshRunning(processes: processes)
         Log.info(.library, "scanned", nil, ["games": games.map { "\($0.install.uid)@\($0.install.version ?? "?")" }.joined(separator: ","),
                                             "missing": found.filter { !$0.isInstalled }.map(\.id).joined(separator: ",")])
+    }
+
+    /// Uses the last completed installation scan; dragging never probes a drive.
+    func canReorder(_ game: Game) -> Bool {
+        discoveredGames.contains { $0.id == game.id }
+    }
+
+    /// The order the library's games were dragged into, by uid.
+    private var libraryOrder = UserDefaults.standard.stringArray(forKey: "libraryOrder") ?? [] {
+        didSet { UserDefaults.standard.set(libraryOrder, forKey: "libraryOrder") }
+    }
+
+    /// Drops the game with uid `uid` before the one with `target`, or last
+    /// with nil, and remembers the order.
+    func moveGame(_ uid: String, before target: String?) {
+        let installed = games.filter { canReorder($0) }.map(\.install.uid)
+        guard installed.contains(uid), target.map({ installed.contains($0) }) ?? true else { return }
+        libraryOrder = LibraryOrder.moving(uid, before: target, in: games.filter { canReorder($0) }.map(\.install.uid), remembered: libraryOrder)
+        games = LibraryOrder.sorted(games.filter { canReorder($0) }, by: libraryOrder, id: \.install.uid)
+            + games.filter { !canReorder($0) }
+        Log.info(.library, "reordered", nil, ["uid": uid])
     }
 
     func heroesEdition(_ platform: InstallPlatform) -> Game? {
@@ -396,19 +459,48 @@ final class AppModel {
             !cleaningFolders.contains(Self.folderKey(game.install.installPath))
     }
 
-    /// Asks Blizzard's version service which build is live. Cheap (one small
-    /// request per game), throttled to every 15 minutes unless forced.
-    func checkForUpdates(force: Bool = false) async {
-        if !force, let last = lastUpdateCheck, Date().timeIntervalSince(last) < 15 * 60 { return }
-        lastUpdateCheck = Date()
-        for game in discoveredGames where (game.family != .other || GameUpdate.canUpdate(game.install)) && game.isInstalled {
-            do {
-                let check = try await GameUpdate(install: game.install).check()
-                updates[game.id] = check
-                Log.info(.gameUpdate, "checked", nil, ["uid": game.id, "installed": game.install.version ?? "?",
-                                                       "latest": check.latest.name, "update_available": check.isUpdateAvailable])
-            } catch {
-                Log.warning(.gameUpdate, "check_failed", nil, ["uid": game.id, "error": error])
+    /// Automatic checks happen at startup and game launch, never on a timer.
+    /// Refresh installation metadata off the main thread before the startup check.
+    func checkForUpdatesAtStartup() async {
+        guard !isPreparingToQuit, UpdatePreferences.automatic() else { return }
+        if scanOffMainThread == nil { scanOffMainThreadOnce() }
+        while let scan = scanOffMainThread { await scan.value }
+        await checkForUpdates()
+    }
+
+    func checkForUpdates(force: Bool = false, only gameID: String? = nil) async {
+        // Wait for in-progress external-drive discovery before selecting games.
+        while let scan = scanOffMainThread { await scan.value }
+        guard !isPreparingToQuit,
+              updateCheckSchedule.request(force: force, automatic: UpdatePreferences.automatic(),
+                                          scope: gameID.map { .games([$0]) } ?? .all) else { return }
+        defer { updateCheckSchedule.cancel() }
+        repeat {
+            let scope = updateCheckSchedule.current ?? .games([])
+            for game in discoveredGames where scope.includes(game.id) && (game.family != .other || GameUpdate.canUpdate(game.install)) && game.isInstalled {
+                do {
+                    let check = try await GameUpdate(install: game.install).check()
+                    // A scan, uninstall or download can finish while the request is in flight.
+                    guard !isPreparingToQuit, let current = discoveredGames.first(where: { $0.id == game.id }),
+                          current.isInstalled, current.install.version == game.install.version,
+                          current.install.buildConfig == game.install.buildConfig else { continue }
+                    updates[game.id] = check
+                    if downloads[game.id] == nil { updateChecked?(current, check) }
+                    Log.info(.gameUpdate, "checked", nil, ["uid": game.id, "installed": game.install.version ?? "?",
+                                                           "latest": check.latest.name, "update_available": check.isUpdateAvailable])
+                } catch {
+                    Log.warning(.gameUpdate, "check_failed", nil, ["uid": game.id, "error": error])
+                }
+            }
+        } while updateCheckSchedule.complete() && !isPreparingToQuit
+    }
+
+    /// Enabling notifications may announce known updates without a new request.
+    func announceKnownUpdates() {
+        for game in discoveredGames where downloads[game.id] == nil && game.isInstalled {
+            if let check = updates[game.id], check.installedBuild == game.install.buildConfig,
+               check.installedVersion == game.install.version {
+                updateChecked?(game, check)
             }
         }
     }
@@ -574,7 +666,7 @@ final class AppModel {
     }
 
     func install(_ product: InstallableProduct, folder: URL, region: Region, languages: GameLanguages,
-                 platform requestedPlatform: InstallPlatform? = nil) async {
+                 platform requestedPlatform: InstallPlatform? = nil, keepsMacAwake: Bool = false) async {
         let platform = requestedPlatform ?? defaultPlatform(for: product)
         defer { ProcessMemory.releaseFreed() }
         let uid = platform.installKey(uid: product.uid)
@@ -588,12 +680,12 @@ final class AppModel {
                                                 "language": languages.text, "speech_language": languages.speech])
         let install = product.install(at: folder, region: region, languages: languages,
             tagString: "\(platform.manifestTag) \(region.launchOptionValue) \(languages.text) text \(languages.speech) speech", platform: platform)
-        await startDownload(DownloadRequest(kind: .install, install: install, product: product))
+        await startDownload(DownloadRequest(kind: .install, install: install, product: product), keepsMacAwake: keepsMacAwake)
     }
 
-    private func startDownload(_ request: DownloadRequest) async {
+    private func startDownload(_ request: DownloadRequest, keepsMacAwake: Bool = false) async {
         do {
-            try downloadQueue.enqueue(request)
+            try downloadQueue.enqueue(request, keepsMacAwake: keepsMacAwake)
             phases.removeValue(forKey: request.key)
             if request.kind == .install, request.install.productCode == "hero" { selectHeroesEdition(request.install.platform) }
             await runDownload(uid: request.key)
@@ -605,8 +697,9 @@ final class AppModel {
 
     private func runDownload(uid: String) async {
         if await downloadQueue.run(key: uid) == .completed {
+            updates.removeValue(forKey: uid)
+            updateCleared?(uid)
             reload()
-            await checkForUpdates(force: true)
         }
     }
 
@@ -807,6 +900,9 @@ final class AppModel {
         }
         phases.removeValue(forKey: game.id)
         updates.removeValue(forKey: game.id)
+        if !discoveredGames.contains(where: { $0.install.uid == game.install.uid && $0.id != game.id }) {
+            libraryOrder.removeAll { $0 == game.install.uid }
+        }
         reload()
         if let cleanupError {
             let alert = NSAlert()
@@ -847,7 +943,7 @@ final class AppModel {
     /// Only one sign-in at a time: the login window and the hidden web view
     /// each serve a single request.
     var isSigningIn: Bool {
-        isAddingAccount || isManagingSavedLogin || isSelectingGameAccount || phases.values.contains {
+        isAddingAccount || isManagingSavedLogin || isSelectingGameAccount || isRefreshingNativeProfile || phases.values.contains {
             switch $0 { case .signingIn, .preparingWindows, .launching: true; default: false }
         }
     }
@@ -872,6 +968,13 @@ final class AppModel {
         Log.info(.launch, "requested", nil, ["uid": game.id, "version": game.install.version ?? "?",
                                              "force_sign_in": forceSignIn, "play_as": accountID != nil])
         guard discardDownload(uid: game.id) else { return }
+        // Public version metadata only, in parallel with launch. Offline checks
+        // must not delay authentication or prevent playing. No other title is queried.
+        Task { [weak self] in
+            guard let self, UpdatePreferences.automatic(), !isPreparingToQuit else { return }
+            if scanOffMainThread == nil { scanOffMainThreadOnce() }
+            await checkForUpdates(only: game.id)
+        }
         do {
             let screen = NSScreen.main ?? NSScreen.screens.first
             let displayID = (screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? CGMainDisplayID()
@@ -894,11 +997,12 @@ final class AppModel {
                 phases[game.id] = .idle
                 return
             }
-            if plan.codename == "WoW", !plan.isWindows {
+            if plan.codename == "WoW", !plan.isWindows, plan.region == .us {
                 let owner = token.accountID
                 guard let identity = accountList[owner] else { phases[game.id] = .idle; return }
-                var choice = gameAccountChoices.choice(owner: owner, uid: game.id, region: plan.region.rawValue)
-                if choice == nil { choice = await chooseGameAccount(game, account: identity, region: plan.region, token: token) }
+                var choice = resolvedGameAccount(owner: owner, uid: game.id, region: plan.region)
+                let currentList = gameAccountCatalogs.accounts(owner: owner, region: plan.region.rawValue)
+                if choice == nil || currentList.map({ list in !list.contains { $0.accountID == choice?.accountID } }) == true { choice = await chooseGameAccount(game, account: identity, region: plan.region, token: token) }
                 guard let choice else { phases[game.id] = .idle; return }
                 guard choice.region.caseInsensitiveCompare(plan.region.rawValue) == .orderedSame else {
                     throw CocoaError(.validationMissingMandatoryProperty)
@@ -941,51 +1045,129 @@ final class AppModel {
         }
     }
 
-    func selectedGameAccountName(for game: Game) -> String? {
-        guard let owner = activeAccount?.id,
-              let plan = try? GameLauncher.plan(for:game,region:regionOverride) else { return nil }
-        return gameAccountChoices.choice(owner:owner,uid:game.id,region:plan.region.rawValue)?.name
+    func effectiveGameRegion(for game: Game) -> String? {
+        (try? GameLauncher.plan(for: game, region: regionOverride).region.rawValue)
+            ?? regionOverride?.rawValue ?? game.install.region
     }
-    /// Explicit selection is available even when a remembered account already exists.
-    func selectGameAccount(for game: Game) async {
-        guard canPlay(game), GameCatalog.family(for: game.install.productCode) == .worldOfWarcraft else { return }
+
+    private func gameAccountContext(for game: Game) -> (Account, Region)? {
+        guard game.family == .worldOfWarcraft, game.install.platform == .macOS,
+              let account = activeAccount,
+              let plan = try? GameLauncher.plan(for: game, region: regionOverride) else { return nil }
+        return (account, plan.region)
+    }
+
+    private func resolvedGameAccount(owner: String, uid: String, region: Region) -> GameAccountSelection? {
+        guard let choice = gameAccountChoices.choice(owner: owner, uid: uid, region: region.rawValue) else { return nil }
+        return gameAccountCatalogs.accounts(owner: owner, region: region.rawValue)?.first { $0.accountID == choice.accountID } ?? choice
+    }
+
+    func selectedGameAccountName(for game: Game) -> String? {
+        guard let (account, region) = gameAccountContext(for: game) else { return nil }
+        return resolvedGameAccount(owner: account.id, uid: game.id, region: region)?.name
+    }
+
+    func knownGameAccounts(for game: Game) -> [GameAccountSelection] {
+        guard let (account, region) = gameAccountContext(for: game) else { return [] }
+        var choices = gameAccountCatalogs.accounts(owner: account.id, region: region.rawValue) ?? []
+        if let selected = resolvedGameAccount(owner: account.id, uid: game.id, region: region),
+           !choices.contains(where: { $0.accountID == selected.accountID }) { choices.append(selected) }
+        return choices
+    }
+
+    func isSelectedGameAccount(_ choice: GameAccountSelection, for game: Game) -> Bool {
+        guard let (account, region) = gameAccountContext(for: game) else { return false }
+        return resolvedGameAccount(owner: account.id, uid: game.id, region: region)?.accountID == choice.accountID
+    }
+
+    func isAvailableGameAccount(_ choice: GameAccountSelection, for game: Game) -> Bool {
+        guard let (account, region) = gameAccountContext(for: game) else { return false }
+        return gameAccountCatalogs.accounts(owner: account.id, region: region.rawValue)?
+            .contains { $0.accountID == choice.accountID } ?? true
+    }
+
+    func useGameAccount(_ choice: GameAccountSelection, for game: Game, owner: String) {
+        guard canPlay(game), let (account, region) = gameAccountContext(for: game), account.id == owner,
+              choice.region == region.rawValue,
+              gameAccountCatalogs.accounts(owner: owner, region: region.rawValue)?.contains(choice) == true else { return }
+        gameAccountChoices.select(choice, owner: owner, uid: game.id, region: region.rawValue)
+    }
+
+    func canRefreshGameAccounts(for game: Game) -> Bool {
+        guard canPlay(game), let (_, region) = gameAccountContext(for: game) else { return false }
+        return region == .us
+    }
+
+    /// Explicit refresh never opens another sign-in or changes a saved choice.
+    func refreshGameAccounts(for game: Game, owner: String) async {
+        guard canRefreshGameAccounts(for: game), let (account, region) = gameAccountContext(for: game), account.id == owner else { return }
         isSelectingGameAccount = true
         defer { isSelectingGameAccount = false }
-        guard let account = activeAccount else {
-            let alert = NSAlert(); alert.messageText = "Sign in to Battle.net first"
-            alert.informativeText = "Use the account menu, then choose Select account again."; alert.runModal(); return
-        }
         do {
-            let plan = try GameLauncher.plan(for:game,region:regionOverride)
-            guard let token = await token(for: plan, gameName: game.displayName, account: account,
-                                          activate: false, forceSignIn: false) else { return }
-            _ = await chooseGameAccount(game, account:account, region:plan.region, token: token)
-        } catch { phases[game.id] = .failed(errorMessage(error)) }
-    }
-    private func chooseGameAccount(_ game: Game, account: Account, region: Region, token: LoginToken) async -> GameAccountSelection? {
-        let previous = gameAccountChoices.choice(owner:account.id,uid:game.id,region:region.rawValue)
-        guard token.accountID == account.id else { return nil }
-        // A discovery connection is a separate game-service session. Avoid
-        // disrupting any open WoW client, even one outside this title.
-        refreshRunning()
-        guard !games.contains(where: { GameCatalog.family(for: $0.install.productCode) == .worldOfWarcraft && isRunning($0) }) else {
-            let alert = NSAlert(); alert.messageText = "Close World of Warcraft first"
-            alert.informativeText = "Account discovery creates a separate game session. Close WoW, then select an account again."
-            alert.runModal(); return nil
-        }
-        guard let choice = await GameAccountPicker().run(account:account,gameName:game.displayName,region:region,selected:previous, load: {
-            self.refreshRunning()
-            guard !self.games.contains(where: { GameCatalog.family(for: $0.install.productCode) == .worldOfWarcraft && self.isRunning($0) }) else {
-                throw NativeGameAccounts.Failure.gameRunning
+            guard let token = tokenVault.token(account: account.id, codename: "WoW"), token.accountID == account.id else {
+                throw NativeGameAccounts.Failure.owner
             }
-            _ = try GameLauncher.plan(for: game, region: region)
-            guard let appURL = game.appURL, let bundle = Bundle(url: appURL),
-                  let version = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
-                  let build = UInt64(version.split(separator: ".").last ?? "") else { throw NativeGameAccounts.Failure.unavailable }
-            return try await NativeGameAccounts().discover(token: token, build: build, region: region)
-        }) else { return nil }
-        // The caller's account/region snapshot owns this choice, not a newly selected identity.
-        gameAccountChoices.select(choice,owner:account.id,uid:game.id,region:region.rawValue)
+            _ = try await discoverGameAccounts(account: account, region: region, token: token)
+        } catch {
+            guard !Task.isCancelled else { return }
+            let alert = NSAlert(); alert.messageText = "Couldn’t refresh WoW accounts"
+            alert.informativeText = "\(errorMessage(error)) Your previous list and saved selections were kept. If no saved WoW login is available, sign in to WoW first."
+            alert.runModal()
+        }
+    }
+
+    private func discoverGameAccounts(account: Account, region: Region, token: LoginToken) async throws -> [GameAccount] {
+        guard region == .us else { throw NativeGameAccounts.Failure.unsupported }
+        guard token.accountID == account.id, accountList[account.id] != nil else { throw NativeGameAccounts.Failure.owner }
+        guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+            throw NativeGameAccounts.Failure.gameRunning
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false; config.timeoutIntervalForRequest = 10; config.timeoutIntervalForResource = 20
+        let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+        let version = try await VersionService(session: session).latest(product: "wowf", region: region)
+        guard version.buildID > 0, !Task.isCancelled else { throw NativeGameAccounts.Failure.unavailable }
+        guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+            throw NativeGameAccounts.Failure.gameRunning
+        }
+        let native = NativeGameAccounts()
+        let licences = try await native.discover(token: token, build: UInt64(version.buildID), region: region)
+        try Task.checkCancellation()
+        guard accountList[account.id] != nil else { throw NativeGameAccounts.Failure.owner }
+        let choices = licences.map { GameAccountSelection(accountID: $0.accountID, name: $0.name, region: $0.region) }
+        guard gameAccountCatalogs.cache(choices, owner: account.id, region: region.rawValue) else { throw NativeGameAccounts.Failure.unavailable }
+        if let profile = native.authenticatedProfile { accountList.setNativeProfile(profile, for: account.id) }
+        return licences
+    }
+
+    private func chooseInitialGameAccount(account: Account, region: Region, token: LoginToken) async {
+        guard gameAccountChoices.defaultChoice(owner: account.id, region: region.rawValue) == nil else { return }
+        guard let choice = await GameAccountPicker().run(account: account, gameName: "Default World of Warcraft account", region: region,
+            selected: nil, explanation: "This will be the default for your WoW editions. Each title can override it from its WoW account menu.",
+            load: { try await self.discoverGameAccounts(account: account, region: region, token: token) }) else { return }
+        guard accountList[account.id] != nil else { return }
+        gameAccountChoices.selectDefault(choice, owner: account.id, region: region.rawValue)
+    }
+
+    private func chooseGameAccount(_ game: Game, account: Account, region: Region, token: LoginToken) async -> GameAccountSelection? {
+        let previous = resolvedGameAccount(owner: account.id, uid: game.id, region: region)
+        guard token.accountID == account.id else { return nil }
+        let usesDefault = gameAccountChoices.defaultChoice(owner: account.id, region: region.rawValue) == nil
+        var firstLoad = true
+        guard let choice = await GameAccountPicker().run(account: account, gameName: game.displayName, region: region, selected: previous,
+            explanation: usesDefault ? "Choose your default WoW licence. Each title can override it from its WoW account menu." : nil,
+            load: {
+                if firstLoad {
+                    firstLoad = false
+                    if let cached = self.gameAccountCatalogs.accounts(owner: account.id, region: region.rawValue) {
+                        return cached.map { GameAccount(titleID: "5730135", accountID: $0.accountID, name: $0.name, region: $0.region) }
+                    }
+                }
+                return try await self.discoverGameAccounts(account: account, region: region, token: token)
+            }) else { return nil }
+        guard accountList[account.id] != nil else { return nil }
+        if usesDefault { gameAccountChoices.selectDefault(choice, owner: account.id, region: region.rawValue) }
+        else { gameAccountChoices.select(choice, owner: account.id, uid: game.id, region: region.rawValue) }
         return choice
     }
 
@@ -1034,6 +1216,11 @@ final class AppModel {
 
     /// Makes another saved account the one games launch with. Nothing is
     /// fetched: its own web session and tokens are already here.
+    func setPortrait(_ portraitID: String?, for accountID: String) {
+        guard portraitID == nil || AccountPortrait.choices.contains(where: { $0.id == portraitID }) else { return }
+        accountList.setPortrait(portraitID, for: accountID)
+    }
+
     func switchAccount(to id: String) {
         guard !isSigningIn, id != accountList.activeID else { return }
         accountList.activate(id)
@@ -1073,7 +1260,8 @@ final class AppModel {
             return
         }
         Log.info(.auth, "token", nil, ["source": "login_window", "codename": target.codename])
-        let saved = await adopt(token, codename: target.codename, session: session, typedName: loginWindow.typedAccountName)
+        let isNewIdentity = accountList[token.accountID] == nil
+        let saved = await adopt(token, codename: target.codename, session: session, typedName: loginWindow.typedAccountName, verifiedProfile: loginWindow.verifiedProfile)
         if let replacing, token.accountID == replacing {
             if saved {
                 do {
@@ -1087,6 +1275,9 @@ final class AppModel {
                 tokenVault.removeAll(account: replacing)
                 Log.notice(.auth, "all_tokens_removed")
             }
+        }
+        if isNewIdentity, target.codename == "WoW", target.region == .us, let account = accountList[token.accountID] {
+            await chooseInitialGameAccount(account: account, region: target.region, token: token)
         }
     }
 
@@ -1103,6 +1294,7 @@ final class AppModel {
         autoLoginStates.removeValue(forKey: account.id)
         accountList.remove(account.id)
         gameAccountChoices.remove(owner: account.id)
+        gameAccountCatalogs.remove(owner: account.id)
         tokenVault.removeAll(account: account.id)
         for codename in Set(InstallableProduct.all.map(\.codename)) {
             let options = LaunchOptions(gameKey: codename)
@@ -1158,10 +1350,11 @@ final class AppModel {
     /// Returns whether the token made it into the keychain.
     @discardableResult
     private func adopt(_ token: LoginToken, codename: String, session: WebSessionID, typedName: String? = nil,
-                       activate: Bool = true) async -> Bool {
+                       activate: Bool = true, verifiedProfile: NativeAccountProfile? = nil) async -> Bool {
         let id = token.accountID
         let isNew = accountList[id] == nil
         let unused = accountList.signedIn(id, session: session, activate: activate)
+        if let verifiedProfile { accountList.setNativeProfile(verifiedProfile, for: id) }
         if let typedName, accountList[id]?.email == nil { accountList.setProfile(id, battleTag: nil, email: typedName) }
         var saved = true
         do {
@@ -1176,6 +1369,46 @@ final class AppModel {
         return saved
     }
 
+    /// Explicit repair for accounts saved before native profile capture existed.
+    /// Uses the saved token, without requesting another sign-in for a name.
+    func refreshBattleTag() async {
+        guard !isSigningIn, let account = activeAccount else { return }
+        guard !RunningProcesses.executables().contains(where: {
+            URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft")
+        }) else {
+            let alert = NSAlert(); alert.messageText = "Close World of Warcraft first"
+            alert.informativeText = "Close WoW on all your devices before refreshing the BattleTag. Your saved login will be kept."
+            alert.runModal(); return
+        }
+        isRefreshingNativeProfile = true
+        defer { isRefreshingNativeProfile = false }
+        guard let token = tokenVault.token(account: account.id, codename: "WoW"), token.accountID == account.id else {
+            let alert = NSAlert(); alert.messageText = "No saved WoW login is available"
+            alert.informativeText = "Waypoint can capture the BattleTag during Safari WoW sign-in or WoW account selection (Americas)."
+            alert.runModal(); return
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false; config.timeoutIntervalForRequest = 10; config.timeoutIntervalForResource = 20
+        let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+        do {
+            let version = try await VersionService(session: session).latest(product: "wowf", region: .us)
+            guard version.region == "us", version.buildID > 0, !Task.isCancelled,
+                  accountList[account.id] != nil,
+                  !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+                throw NativeGameAccounts.Failure.gameRunning
+            }
+            let profile = try await NativeGameAccounts().fetchProfile(token: token, build: UInt64(version.buildID), region: .us)
+            guard !Task.isCancelled, accountList.setNativeProfile(profile, for: account.id) else {
+                throw NativeGameAccounts.Failure.unavailable
+            }
+        } catch {
+            if Task.isCancelled { return }
+            let alert = NSAlert(); alert.messageText = "Couldn’t retrieve the BattleTag"
+            alert.informativeText = "Your saved login and account selections were kept. Try again with WoW closed."
+            alert.runModal()
+        }
+    }
+
     /// Looks up the account's BattleTag and email on Blizzard's account page.
     private func refreshProfile(_ id: String) async {
         guard let account = accountList[id], profileFetches.insert(id).inserted else { return }
@@ -1186,12 +1419,46 @@ final class AppModel {
                 Log.warning(.auth, "profile_other_account")
                 return
             }
-            accountList.setProfile(id, battleTag: profile.battleTag, email: profile.email)
+            // A delayed website lookup must not overwrite a newly verified native name.
+            accountList.setProfile(id, battleTag: accountList[id]?.battleTag == nil ? profile.battleTag : nil, email: profile.email)
             Log.info(.auth, "profile", nil, ["battletag": profile.battleTag != nil, "email": profile.email != nil])
         case .signedOut:
             Log.info(.auth, "profile_signed_out")
         case .failed:
             Log.info(.auth, "profile_failed")
+        }
+    }
+
+    /// Issue fresh target authorization without caching an unmeasured lifetime
+    /// or replacing the source account/session. Preview bundles force this route.
+    private func sharedGameAuthorization(account: Account, region: Region, target: NativeGameAccounts.CredentialTarget,
+                                         sourceToken: LoginToken? = nil) async -> LoginToken? {
+        do {
+            guard region == .us else { throw NativeGameAccounts.Failure.unsupported }
+            guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+                throw NativeGameAccounts.Failure.gameRunning
+            }
+            guard let source = sourceToken ?? tokenVault.token(account: account.id, codename: "WoW"), source.accountID == account.id else {
+                throw NativeGameAccounts.Failure.owner
+            }
+            let config = URLSessionConfiguration.ephemeral
+            config.waitsForConnectivity = false; config.timeoutIntervalForRequest = 10; config.timeoutIntervalForResource = 20
+            let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
+            let version = try await VersionService(session: session).latest(product: "wowf", region: .us)
+            guard version.buildID > 0, !Task.isCancelled, accountList[account.id] != nil else { return nil }
+            guard !RunningProcesses.executables().contains(where: { URL(fileURLWithPath: $0.path).lastPathComponent.hasPrefix("World of Warcraft") }) else {
+                throw NativeGameAccounts.Failure.gameRunning
+            }
+            let issued = try await NativeGameAccounts().requestCredential(token: source, build: UInt64(version.buildID), region: region, target: target)
+            guard !Task.isCancelled, accountList[account.id] != nil, issued.accountID == account.id else { return nil }
+            Log.info(.auth, "shared_authorization_issued", nil, ["source": "WoW", "target": target.codename])
+            return issued
+        } catch {
+            guard !Task.isCancelled else { return nil }
+            Log.warning(.auth, "shared_authorization_failed")
+            let alert = NSAlert(); alert.messageText = "Shared sign-in could not continue"
+            alert.informativeText = "Shared sign-in requires a saved WoW login for this Battle.net account, the Americas region, and Blizzard games closed on every device. Your saved logins were kept. You can try again, or use Sign In Again and Play to sign in directly to \(target.displayName)."
+            alert.runModal(); return nil
         }
     }
 
@@ -1208,11 +1475,25 @@ final class AppModel {
         // Only tokens Waypoint got itself. The one Battle.net leaves in the
         // game's Launch Options can be long expired: the game then shows
         // "Closed" and Waypoint can't tell, so it would keep handing it over.
-        // Nothing is refreshed first: Battle.net's login page keeps no session
-        // that signs in again without the form, and a token lasts for months.
+        // Cached game tickets are reused; their server lifetime is not assumed.
+        // Explicit test builds prove the exchange instead of accidentally using
+        // a previously cached target ticket. Production builds do not enter here.
+        if Bundle.main.object(forInfoDictionaryKey: "WaypointSharedSignInPreview") as? Bool == true,
+           !forceSignIn, let target = NativeGameAccounts.CredentialTarget(sharedCodename: plan.codename), let account {
+            return await sharedGameAuthorization(account: account, region: plan.region, target: target)
+        }
         if !forceSignIn, let account, let token = tokenVault.token(account: account.id, codename: plan.codename) {
             Log.info(.auth, "token", nil, ["source": "keychain", "codename": plan.codename])
             return token
+        }
+
+        // A new supported family can use the saved WoW authorization instead
+        // of asking for credentials. Missing sources and untested regions keep
+        // the established direct-login flow. A failed exchange stops explicitly.
+        if !forceSignIn, let account, plan.region == .us,
+           let target = NativeGameAccounts.CredentialTarget(sharedCodename: plan.codename),
+           let source = tokenVault.token(account: account.id, codename: "WoW"), source.accountID == account.id {
+            return await sharedGameAuthorization(account: account, region: plan.region, target: target, sourceToken: source)
         }
 
         if let account, var state = autoLoginStates[account.id], state.begin() {
@@ -1263,7 +1544,7 @@ final class AppModel {
                 // Manual sign-in may have used another password: only an
                 // explicit Update Saved Login re-enables these credentials.
                 await adopt(token, codename: plan.codename, session: session, typedName: loginWindow.typedAccountName,
-                            activate: activate)
+                            activate: activate, verifiedProfile: loginWindow.verifiedProfile)
                 return token
             case .failed:
                 state.failedTemporarily()
@@ -1300,7 +1581,7 @@ final class AppModel {
         }
         Log.info(.auth, "token", nil, ["source": "login_window", "codename": plan.codename])
         await adopt(token, codename: plan.codename, session: session, typedName: loginWindow.typedAccountName,
-                    activate: activate)
+                    activate: activate, verifiedProfile: loginWindow.verifiedProfile)
         return token
     }
 

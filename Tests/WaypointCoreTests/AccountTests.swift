@@ -129,3 +129,32 @@ import Testing
         #expect(account.email == "private@example.com")
     }
 }
+
+@Test func portraitsPersistPerAccountWithoutChangingIdentityOrSession() throws {
+    var list = AccountList()
+    let first = WebSessionID.fresh(), second = WebSessionID.fresh()
+    list.signedIn("one", session: first)
+    list.signedIn("two", session: second)
+    list.setPortrait("wow-human_male", for: "one")
+    list.setPortrait("d3-monk_male", for: "two")
+    list.setPortrait("ignored", for: "missing")
+    let restored = try JSONDecoder().decode(AccountList.self, from: JSONEncoder().encode(list))
+    #expect(restored["one"]?.portraitID == "wow-human_male")
+    #expect(restored["two"]?.portraitID == "d3-monk_male")
+    #expect(restored["one"]?.session == first)
+    #expect(restored.active?.id == "two")
+    list.signedIn("one", session: .fresh())
+    #expect(list["one"]?.portraitID == "wow-human_male")
+    list.setPortrait(nil, for: "one")
+    #expect(list["one"]?.portraitID == nil)
+}
+
+@Test func accountsSavedBeforePortraitsStillDecode() throws {
+    let old = Data(#"{"id":"one","session":{"shared":{}},"tint":"blue"}"#.utf8)
+    let account = try JSONDecoder().decode(Account.self, from: old)
+    #expect(account.id == "one")
+    #expect(account.portraitID == nil)
+    #expect(AccountPortrait.choices.count == 11)
+    #expect(Set(AccountPortrait.choices.map(\.id)).count == 11)
+    #expect(AccountPortrait.choices.allSatisfy { $0.url.scheme == "https" })
+}

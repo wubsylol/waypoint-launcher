@@ -31,10 +31,8 @@ public enum WindowsTitle: String, CaseIterable, Sendable {
     }
     public var folderName: String { self == .diabloII ? "Diablo II Resurrected" : displayName }
     public var backend: Backend { self == .heroes ? .dxmt : .d3dMetal }
-    /// User-facing compatibility layer; these games are not macOS native.
-    public var compatibilityLabel: String {
-        backend == .dxmt ? "DXMT/Wine" : "D3DMetal/Wine"
-    }
+    /// User-facing platform name; the rendering backend is an implementation detail.
+    public var compatibilityLabel: String { "Windows" }
     public var executablePath: String {
         switch self {
         case .heroes: "Support64/HeroesSwitcher_x64.exe"
@@ -68,8 +66,7 @@ public enum WindowsTitle: String, CaseIterable, Sendable {
         }
     }
 
-    /// Preview availability is separate from full gameplay qualification.
-    /// Keep the Preview label until broader gameplay checks have passed.
+    /// Internal gameplay qualification, separate from availability and UI labels.
     public var isQualified: Bool { self == .heroes }
     public var isEnabled: Bool { true }
     public static var enabled: [Self] { allCases.filter(\.isEnabled) }

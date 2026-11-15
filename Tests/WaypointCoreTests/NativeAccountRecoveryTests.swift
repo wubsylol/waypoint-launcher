@@ -12,12 +12,14 @@ private final class AccountTestTransport: NativeAccountTransport {
     var sendFailsAt: Int?
     var written: [Data] = []
     var sends = 0
+    var sentPackets: [Data] = []
     var stall: Bool
     init(_ input: Data = Data(), stall: Bool = false) { self.input = input; self.stall = stall }
     func connect() async throws { if connectFails { throw NativeGameAccounts.Failure.unavailable } }
     func send(_ data: Data) async throws {
         written.append(data)
         sends += 1
+        sentPackets.append(data)
         if cancelled { throw CancellationError() }
         if sends == sendFailsAt { throw NativeGameAccounts.Failure.unavailable }
     }
@@ -1139,4 +1141,125 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
         let request = try BGSWire.decode(Data(packet.dropFirst(2 + length)))
         #expect(try BGSWire.uint(BGSWire.decode(BGSWire.data(request, 1)), 1) == 1)
     }
+}
+
+private func nativeProfileReplies(tag: String? = "Example#1234", owner: UInt64 = 123) -> [Data] {
+    var record = BGSWire.number(1, owner)
+    if let tag { record += BGSWire.text(3, tag) }
+    // The optional game-account field is repeated and is not read as a scalar.
+    record += BGSWire.bytes(2, BGSWire.number(1, 456)) + BGSWire.bytes(2, BGSWire.number(1, 457))
+    return [accountFrame(token: 0), accountFrame(token: 1),
+        accountFrame(token: 99, body: BGSWire.bytes(2, record), service: 0, method: 1, hash: 0x9da8116b)]
+}
+@Test @MainActor func nativeProfileReturnsOwnerVerifiedBattleTagWithoutExtraRPCs() async throws {
+    let transport = AccountTestTransport(nativeProfileReplies().reduce(Data(), +))
+    let client = NativeGameAccounts(transport: transport)
+    let profile = try await client.fetchProfile(token: accountTestToken, build: 70938, region: .us)
+    #expect(profile.accountID == "123"); #expect(profile.battleTag == "Example#1234")
+    #expect(client.authenticatedProfile == profile); #expect(transport.sends == 2); #expect(transport.cancelled)
+}
+@Test @MainActor func nativeProfileRejectsWrongOwnerBeforeReturningMetadata() async {
+    let transport = AccountTestTransport(nativeProfileReplies(owner: 999).reduce(Data(), +))
+    let client = NativeGameAccounts(transport: transport)
+    do {
+        _ = try await client.fetchProfile(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Wrong-owner BattleTag was accepted")
+    } catch NativeGameAccounts.Failure.owner { #expect(client.authenticatedProfile == nil); #expect(transport.cancelled) }
+    catch { Issue.record("Expected account identity mismatch") }
+}
+@Test @MainActor func nativeProfileMissingBattleTagDoesNotRejectValidLogin() async throws {
+    let transport = AccountTestTransport(nativeProfileReplies(tag: nil).reduce(Data(), +))
+    let profile = try await NativeGameAccounts(transport: transport).fetchProfile(token: accountTestToken, build: 70938, region: .us)
+    #expect(profile.accountID == "123"); #expect(profile.battleTag == nil); #expect(transport.cancelled)
+}
+@Test @MainActor func nativeDiscoveryAlsoCapturesVerifiedProfile() async throws {
+    let replies = nativeProfileReplies() + Array(accountReplies().dropFirst(3))
+    let transport = AccountTestTransport(replies.reduce(Data(), +)), client = NativeGameAccounts(transport: transport)
+    let licences = try await client.discover(token: accountTestToken, build: 70938, region: .us)
+    #expect(licences.count == 1); #expect(client.authenticatedProfile?.battleTag == "Example#1234")
+    #expect(transport.sends == 4); #expect(transport.cancelled)
+}
+@Test func nativeProfileFiltersOptionalMetadataWithoutTrustingArbitraryStrings() {
+    for tag in ["", "Example", "#1234", "Example#", "Example#abcd", "Example#12#34", "Example\n#1234", String(repeating: "x", count: 257)] {
+        let record = try! BGSWire.decode(BGSWire.text(3, tag))
+        #expect(NativeAccountProfile(accountID: "123", record: record).battleTag == nil)
+    }
+    #expect(NativeAccountProfile(accountID: "123", record: [3: [.number(123)]]).battleTag == nil)
+    #expect(NativeAccountProfile(accountID: "123", record: [3: [.bytes(Data([255]))]]).battleTag == nil)
+    let valid = NativeAccountProfile(accountID: "123", record: [3: [.bytes(Data("Ünicode#1234".utf8))]])
+    #expect(valid.battleTag == "Ünicode#1234")
+}
+@Test func nativeProfileApplicationIsOwnerScopedAndKeepsEmailAndKnownNames() throws {
+    var list = AccountList(); list.signedIn("123", session: .shared); list.signedIn("456", session: .fresh())
+    list.setProfile("123", battleTag: nil, email: "private@example.invalid")
+    let profile = NativeAccountProfile(accountID: "123", record: try BGSWire.decode(BGSWire.text(3, "Example#1234")))
+    let wrongOwner = list.setNativeProfile(profile, for: "456"); #expect(!wrongOwner); #expect(list["456"]?.battleTag == nil)
+    let applied = list.setNativeProfile(profile, for: "123"); #expect(applied); #expect(list["123"]?.displayName == "Example#1234")
+    #expect(list["123"]?.email == "private@example.invalid")
+    let missing = list.setNativeProfile(NativeAccountProfile(accountID: "123", record: [:]), for: "123"); #expect(!missing)
+    #expect(list["123"]?.battleTag == "Example#1234")
+    _ = list.remove("123"); let removed = list.setNativeProfile(profile, for: "123"); #expect(!removed)
+}
+
+@Test @MainActor func nativeTargetCredentialRequiresMatchingOwnerAndNeverSavesIt() async throws {
+    for owner in ["123", "999"] {
+        let issued = "US-fedcba9876543210fedcba9876543210-\(owner)"
+        let replies = nativeProfileReplies() + [accountFrame(token: 2, body: BGSWire.text(1, issued))]
+        let transport = AccountTestTransport(replies.reduce(Data(), +))
+        do {
+            let result = try await NativeGameAccounts(transport: transport).requestCredential(token: accountTestToken, build: 70938, region: .us)
+            #expect(owner == "123"); #expect(result.accountID == "123")
+        } catch NativeGameAccounts.Failure.owner { #expect(owner == "999") }
+        #expect(transport.sends == 3); #expect(transport.cancelled)
+        let packet = try #require(transport.sentPackets.last)
+        let headerSize = Int(packet[0]) * 256 + Int(packet[1])
+        let header = try BGSWire.decode(Data(packet[2..<(2 + headerSize)]))
+        let body = try BGSWire.decode(Data(packet.dropFirst(2 + headerSize)))
+        #expect(try BGSWire.uint(header, 2) == 3)
+        #expect(try BGSWire.uint(body, 1) == 0x46656e)
+    }
+}
+@Test @MainActor func nativeTargetCredentialRejectsWrongSourceBeforeIssuingRequest() async {
+    let transport = AccountTestTransport(nativeProfileReplies(owner: 999).reduce(Data(), +))
+    do {
+        _ = try await NativeGameAccounts(transport: transport).requestCredential(token: accountTestToken, build: 70938, region: .us)
+        Issue.record("Wrong source owner accepted")
+    } catch NativeGameAccounts.Failure.owner { #expect(transport.sends == 2) }
+    catch { Issue.record("Unexpected error") }
+    #expect(transport.cancelled)
+}
+
+@Test @MainActor func nativeTargetValidationUsesTargetTitleAndWindowsPlatform() async throws {
+    let transport = AccountTestTransport(nativeProfileReplies().reduce(Data(), +))
+    try await NativeGameAccounts(transport: transport).validateCredential(token: accountTestToken, build: 123456, region: .us, target: .diabloIV)
+    let packet = transport.sentPackets[1]
+    let size = Int(packet[0]) * 256 + Int(packet[1])
+    let body = try BGSWire.decode(Data(packet.dropFirst(2 + size)))
+    #expect(try BGSWire.uint(body, 1) == 0x46656e)
+    #expect(try BGSWire.data(body, 2) == Data("Wn64".utf8))
+    #expect(try BGSWire.uint(body, 4) == 123456)
+    #expect(transport.sends == 2); #expect(transport.cancelled)
+}
+
+@Test @MainActor func nativeHearthstoneExchangeAndValidationUseDistinctTitleAndMacPlatform() async throws {
+    let issued = "US-fedcba9876543210fedcba9876543210-123"
+    let exchange = AccountTestTransport((nativeProfileReplies() + [accountFrame(token: 2, body: BGSWire.text(1, issued))]).reduce(Data(), +))
+    let token = try await NativeGameAccounts(transport: exchange).requestCredential(token: accountTestToken, build: 70938, region: .us, target: .hearthstone)
+    let packet = try #require(exchange.sentPackets.last)
+    let headerSize = Int(packet[0]) * 256 + Int(packet[1])
+    #expect(try BGSWire.uint(BGSWire.decode(Data(packet.dropFirst(2 + headerSize))), 1) == 0x57544347)
+    let validation = AccountTestTransport(nativeProfileReplies().reduce(Data(), +))
+    try await NativeGameAccounts(transport: validation).validateCredential(token: token, build: 98765, region: .us, target: .hearthstone)
+    let logon = validation.sentPackets[1], size = Int(logon[0]) * 256 + Int(logon[1])
+    let body = try BGSWire.decode(Data(logon.dropFirst(2 + size)))
+    #expect(try BGSWire.uint(body, 1) == 0x57544347)
+    #expect(try BGSWire.data(body, 2) == Data("Mc64".utf8))
+    #expect(validation.sends == 2); #expect(validation.cancelled); #expect(exchange.cancelled)
+}
+@Test func sharedSignInOnlyRoutesExplicitlySupportedCrossGameTargets() {
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "WTCG") == .hearthstone)
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "Fen") == .diabloIV)
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "WoW") == nil)
+    #expect(NativeGameAccounts.CredentialTarget(sharedCodename: "Pro") == nil)
+    #expect(NativeGameAccounts.CredentialTarget.hearthstone.productCode == "hsb")
 }

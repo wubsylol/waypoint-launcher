@@ -11,8 +11,7 @@ public struct InstallableProduct: Sendable, Identifiable, Equatable, Codable {
     public func installationDisplayName(platform: InstallPlatform) -> String {
         guard platform == .windows, let title = WindowsTitle(rawValue: productCode),
               title.uid == uid else { return displayName }
-        let preview = title.isQualified ? "" : " · Preview"
-        return "\(displayName) (\(title.compatibilityLabel)\(preview))"
+        return "\(displayName) (\(title.compatibilityLabel))"
     }
 
     /// Battle.net's install uid; also what `-uid` passes to the game. Not

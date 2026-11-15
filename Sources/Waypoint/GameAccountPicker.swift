@@ -14,12 +14,14 @@ final class GameAccountPicker: NSObject, NSWindowDelegate {
     private var retryButton = NSButton()
     private var remembered: GameAccountSelection?
     private var region = ""
+    private var explanation = ""
     private var task: Task<Void, Never>?
     private var loader: (@MainActor () async throws -> [GameAccount])?
 
-    func run(account: Account, gameName: String, region: Region, selected: GameAccountSelection?,
+    func run(account: Account, gameName: String, region: Region, selected: GameAccountSelection?, explanation: String? = nil,
              load: @escaping @MainActor () async throws -> [GameAccount]) async -> GameAccountSelection? {
         remembered = selected; self.region = region.rawValue; loader = load
+        self.explanation = explanation ?? "This choice will be remembered for this title. The game checks subscription and edition access."
         return await withCheckedContinuation { continuation in
             self.continuation = continuation
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 260),
@@ -73,7 +75,7 @@ final class GameAccountPicker: NSObject, NSWindowDelegate {
                     self.popup.selectItem(at: index)
                 }
                 self.popup.isEnabled = !accounts.isEmpty; self.useButton.isEnabled = !accounts.isEmpty
-                self.status.stringValue = accounts.isEmpty ? "No WoW accounts were found in this region." : "This choice will be remembered for this title. The game checks subscription and edition access."
+                self.status.stringValue = accounts.isEmpty ? "No WoW accounts were found in this region." : self.explanation
                 self.window?.makeFirstResponder(self.popup)
             } catch {
                 guard let self, self.continuation != nil, !Task.isCancelled else { return }

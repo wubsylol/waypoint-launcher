@@ -26,6 +26,8 @@ public struct Account: Codable, Equatable, Sendable, Identifiable {
     public var email: String?
     public var session: WebSessionID
     public var tint: AccountTint
+    /// Optional local artwork choice; older account records decode without it.
+    public var portraitID: String?
 
     public init(id: String, battleTag: String? = nil, email: String? = nil, session: WebSessionID, tint: AccountTint = .blue) {
         self.id = id
@@ -86,11 +88,25 @@ public struct AccountList: Codable, Equatable, Sendable {
             ?? AccountTint.allCases[accounts.count % AccountTint.allCases.count]
     }
 
+    public mutating func setPortrait(_ portraitID: String?, for id: String) {
+        guard let i = accounts.firstIndex(where: { $0.id == id }) else { return }
+        accounts[i].portraitID = portraitID
+    }
+
     /// Fills in what Blizzard's account page says about a saved account.
     public mutating func setProfile(_ id: String, battleTag: String?, email: String?) {
         guard let i = accounts.firstIndex(where: { $0.id == id }) else { return }
         if let battleTag, !battleTag.isEmpty { accounts[i].battleTag = battleTag }
         if let email, !email.isEmpty { accounts[i].email = email }
+    }
+
+    /// Applies only the owner-bound metadata returned by native authentication.
+    /// Existing names survive missing/invalid metadata; no identity is added here.
+    @discardableResult
+    public mutating func setNativeProfile(_ profile: NativeAccountProfile, for owner: String) -> Bool {
+        guard profile.accountID == owner, self[owner] != nil, let tag = profile.battleTag else { return false }
+        setProfile(owner, battleTag: tag, email: nil)
+        return true
     }
 
     /// Forgets an account; the next one, if any, becomes active. Returns the
