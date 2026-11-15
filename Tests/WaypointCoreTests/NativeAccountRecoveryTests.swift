@@ -874,11 +874,12 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
 
 @Test @MainActor func appLifecycleDispatchesOnlyCreateAndDestroyWithOwnAppHandleAndContext() async throws {
     for callbackFirst in [true, false] {
+      for destructionFirst in [true, false] {
         let source = AccountTestTransport(applicationIssuanceReplies())
         let response = accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity()))
         let created = appLifecycleNotification(1)
         let target = AccountTestTransport((appLifecycleAuthReplies() + (callbackFirst ? [created,response] : [response,created])
-            + [appLifecycleNotification(2), accountFrame(token: 3)]).reduce(Data(), +))
+            + (destructionFirst ? [appLifecycleNotification(2), accountFrame(token: 3)] : [accountFrame(token: 3), appLifecycleNotification(2)])).reduce(Data(), +))
         let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
             build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
         #expect(report.creationResponseVerified && report.creationCallbackVerified && report.destroyRequestAccepted && report.destructionCallbackVerified)
@@ -900,6 +901,8 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
             } else { #expect(data.isEmpty) }
         }
     }
+}
+
 }
 
 @Test @MainActor func appLifecycleDoesNotCreateWithoutExplicitAppHandle() async {
@@ -969,4 +972,31 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
         #expect(report.outcome.contains("unconfirmed"))
         #expect(target.written.count == 3 && source.cancelled && target.cancelled)
     }
+}
+
+@Test @MainActor func appLifecycleMissingDestructionCallbackRemainsUnconfirmedWithoutRetry() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport((appLifecycleAuthReplies() + [
+        accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity())),
+        appLifecycleNotification(1), accountFrame(token: 3)]).reduce(Data(), +), stall: true)
+    let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us,
+        applicationClient: NativeGameAccounts(transport: target, timeout: .milliseconds(30)))
+    #expect(report.destroyRequestAccepted && !report.destructionCallbackVerified)
+    #expect(report.outcome.contains("unconfirmed"))
+    #expect(target.cancelled && target.written.count == 4)
+}
+
+@Test @MainActor func appLifecycleForeignDestructionAfterAcknowledgmentRemainsUnconfirmed() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let target = AccountTestTransport((appLifecycleAuthReplies() + [
+        accountFrame(token: 2, body: BGSWire.bytes(1, appLifecycleIdentity())),
+        appLifecycleNotification(1), accountFrame(token: 3),
+        appLifecycleNotification(2, context: "foreign-context")]).reduce(Data(), +))
+    let report = try await NativeGameAccounts(transport: source).applicationSessionLifecycleTest(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us,
+        applicationClient: NativeGameAccounts(transport: target))
+    #expect(report.destroyRequestAccepted && !report.destructionCallbackVerified)
+    #expect(report.outcome.contains("unconfirmed"))
+    #expect(target.cancelled && target.written.count == 4)
 }

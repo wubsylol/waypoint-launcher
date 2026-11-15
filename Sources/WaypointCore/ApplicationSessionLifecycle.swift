@@ -102,6 +102,7 @@ final class ApplicationSessionLifecycle {
                 // Do not accept an unrelated destruction event before either ID is known.
                 guard responseIdentity != nil || callbackIdentity != nil else { throw ApplicationSessionTestFailure.identity }
                 report.destructionCallbackVerified = true
+                if report.destroyRequestAccepted { report.outcome = "Destroy acknowledged and matching destruction callback verified; connection closed" }
             }
         } catch {
             identityConflict = true
@@ -116,7 +117,9 @@ final class ApplicationSessionLifecycle {
     func acceptDestroyResponse() throws {
         guard destroySubmitted, responseIdentity != nil, !identityConflict else { throw ApplicationSessionTestFailure.unavailable }
         report.destroyRequestAccepted = true
-        report.outcome = "Destroy request accepted; connection closed"
+        report.outcome = report.destructionCallbackVerified
+            ? "Destroy acknowledged and matching destruction callback verified; connection closed"
+            : "Destroy acknowledged; matching destruction callback unconfirmed; connection closed"
     }
     func recordFailure(_ error: Error) {
         switch error {

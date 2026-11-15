@@ -78,3 +78,16 @@ callback context; changed auth identity; creation refusal; no destruction after
 identity conflicts; and interrupted cleanup with no reconnection. Independent
 review found and then verified the identity-conflict cleanup fix. Earlier
 friends/presence/auth controls remain passing. Live lifecycle test NOT RUN.
+
+## Observation control2 (prepared, not run)
+
+After Destroy acknowledgment, passively receive notifications for up to five
+seconds, within the existing 35-second App connection deadline. Accept only the
+matching owner/handle/region/instance and authenticated context. No additional RPC,
+reconnect or repeated Destroy is sent. Callback-before-ack remains supported.
+Timeout, cancellation or malformed/foreign notifications leave the callback
+unconfirmed; acknowledgment is reported independently. This does not establish
+other-client coexistence or presence access. 63 targeted tests pass, including
+both destruction callback orders, a foreign post-ack callback, and a stalled
+callback deadline with no retry.
+A fresh explicit live-test approval is required.

@@ -14,12 +14,12 @@ import WaypointCore
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 660, height: 540),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint — App Session Lifecycle Test 1"
+        window.title = "Waypoint — App Session Lifecycle Test 2"
         window.delegate = self
         window.isReleasedWhenClosed = false
         let title = NSTextField(labelWithString: "Temporary application session — explicit test")
         title.font = .systemFont(ofSize: 18, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Run only after agreeing to this test. Close Blizzard games and official Battle.net launchers on both Macs. This requests a fresh App credential, authenticates, creates one session bound to its own App handle, verifies the reply/callback, then requests destruction in the same context. It may affect another client or visible presence. No friends/presence queries, status updates or messages are sent. A disconnect, cancellation or failed identity check can leave cleanup unconfirmed; there is no automatic retry or reconnect. Saved login is not replaced.")
+        let explanation = NSTextField(wrappingLabelWithString: "Run only after agreeing to this test. Close Blizzard games and official Battle.net launchers on both Macs. This requests a fresh App credential, authenticates, creates one session bound to its own App handle, verifies the reply/callback, then requests destruction in the same context and waits up to five seconds for its callback (within the overall connection deadline). It may affect another client or visible presence. No friends/presence queries, status updates or messages are sent. A disconnect, cancellation or failed identity check can leave cleanup unconfirmed; there is no automatic retry or reconnect. Saved login is not replaced.")
         button = NSButton(title: "Create and clean up App session", target: self, action: #selector(run))
         let stop = NSButton(title: "Stop connection", target: self, action: #selector(stop))
         let actions = NSStackView(views: [button, stop, NSView()]); actions.spacing = 12

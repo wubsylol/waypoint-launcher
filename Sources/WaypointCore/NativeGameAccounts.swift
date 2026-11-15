@@ -301,6 +301,7 @@ public final class NativeGameAccounts {
                 try lifecycle.markDestroySubmitted()
                 _ = try await applicationClient.call(hash: 0x7b37d770, method: 3, replyKind: .sessionLifecycle)
                 try lifecycle.acceptDestroyResponse()
+                try await applicationClient.observeSessionDestruction(lifecycle)
             } catch {
                 lifecycle.recordFailure(error)
                 // Cleanup only a validated creation in this same still-open context.
@@ -310,10 +311,26 @@ public final class NativeGameAccounts {
                         try lifecycle.markDestroySubmitted()
                         _ = try await applicationClient.call(hash: 0x7b37d770, method: 3, replyKind: .sessionLifecycle)
                         try lifecycle.acceptDestroyResponse()
+                        try await applicationClient.observeSessionDestruction(lifecycle)
                     } catch { lifecycle.recordFailure(error) }
                 }
             }
             return lifecycle.report
+        }
+    }
+
+    /// Passive observation only: no retry, reconnect, or additional RPC.
+    private func observeSessionDestruction(_ lifecycle: ApplicationSessionLifecycle) async throws {
+        guard !lifecycle.report.destructionCallbackVerified else { return }
+        let observationDeadline = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            self?.cancel()
+        }
+        defer { observationDeadline.cancel() }
+        while !lifecycle.report.destructionCallbackVerified {
+            try Task.checkCancellation()
+            let (header, body) = try await receive()
+            try notification(header, body)
         }
     }
 
