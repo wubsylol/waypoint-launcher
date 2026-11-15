@@ -46,7 +46,7 @@ public final class NativeGameAccounts {
         self.transport = transport; self.timeout = timeout
     }
     public func cancel() { closed = true; transport.cancel() }
-    private func authenticated<T>(token: LoginToken, build: UInt64, region: Region, operation: () async throws -> T) async throws -> T {
+    private func authenticated<T>(token: LoginToken, build: UInt64, region: Region, titleID: UInt64 = 0x576f57, operation: () async throws -> T) async throws -> T {
         guard region == .us else { throw Failure.unsupported }
         guard let owner = UInt64(token.accountID), owner > 0, build > 0 else { throw Failure.owner }
         expectedOwner = owner
@@ -80,7 +80,7 @@ public final class NativeGameAccounts {
                     connectionIdentity = identity // In memory only; never displayed/logged.
                 }
             }
-            let request = W.number(1, 5_730_135) + W.text(2, "Mc64") + W.text(3, "enUS")
+            let request = W.number(1, titleID) + W.text(2, "Mc64") + W.text(3, "enUS")
                 + W.number(4, build) + W.bytes(10, W.text(1, token.value))
             if recordsDiagnostics { diagnosticStage = .authentication }
             _ = try await call(hash: 0xc02f8216, method: 1, body: request)
@@ -96,6 +96,10 @@ public final class NativeGameAccounts {
     /// client reference, not a claim of current entitlement. Discards the token:
     /// no target authentication, friends call, session API or persistent write.
     public func applicationCredentialPreflight(token: LoginToken, build: UInt64, region: Region) async throws {
+        _ = try await issueApplicationCredential(token: token, build: build, region: region)
+    }
+
+    private func issueApplicationCredential(token: LoginToken, build: UInt64, region: Region) async throws -> LoginToken {
         try await authenticated(token: token, build: build, region: region) {
             let response = try await call(hash: 0xc02f8216, method: 3,
                 body: W.number(1, 0x417070), replyKind: .applicationCredential)
@@ -103,6 +107,35 @@ public final class NativeGameAccounts {
             guard data.count <= 256, let text = String(data: data, encoding: .utf8),
                   let candidate = LoginToken(text) else { throw ApplicationCredentialFailure.format }
             guard candidate.accountID == String(expectedOwner) else { throw Failure.owner }
+            return candidate
+        }
+    }
+
+    /// Experimental second stage. Only authenticates as App, with a fresh
+    /// same-owner credential held in memory. Neither connection creates an
+    /// explicit application session or performs any social request.
+    public func applicationAuthenticationPreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws {
+        try await applicationAuthenticationPreflight(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts())
+    }
+
+    func applicationAuthenticationPreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64,
+                                           region: Region, applicationClient: NativeGameAccounts) async throws {
+        guard applicationBuild > 0 else { throw ApplicationAuthenticationFailure.unavailable }
+        let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
+        try Task.checkCancellation()
+        do {
+            try await applicationClient.authenticated(token: candidate, build: applicationBuild, region: region,
+                titleID: 0x417070, operation: {})
+        } catch {
+            // NWConnection cancellation may surface as a transport error.
+            try Task.checkCancellation()
+            switch error {
+            case is CancellationError: throw CancellationError()
+            case Failure.rejected(let code): throw ApplicationAuthenticationFailure.refused(code)
+            case Failure.owner: throw ApplicationAuthenticationFailure.owner
+            default: throw ApplicationAuthenticationFailure.unavailable
+            }
         }
     }
 
@@ -412,4 +445,8 @@ private final class TLSAccountTransport: NativeAccountTransport {
 /// Only the issuance RPC uses this error; auth failures keep their own stage.
 public enum ApplicationCredentialFailure: Error {
     case refused(UInt64), format
+}
+
+public enum ApplicationAuthenticationFailure: Error {
+    case refused(UInt64), owner, unavailable
 }

@@ -6,6 +6,7 @@ import Testing
 private final class AccountTestTransport: NativeAccountTransport {
     var input: Data
     var cancelled = false
+    var cancellationReturnsUnavailable = false
     var pending: CheckedContinuation<Data, Error>?
     var connectFails = false
     var sendFailsAt: Int?
@@ -29,7 +30,7 @@ private final class AccountTestTransport: NativeAccountTransport {
         // Exercise fragmentation independently of message boundaries.
         let chunk = Data(input.prefix(min(maximum, 3))); input.removeFirst(chunk.count); return chunk
     }
-    func cancel() { cancelled = true; pending?.resume(throwing: CancellationError()); pending = nil }
+    func cancel() { cancelled = true; pending?.resume(throwing: cancellationReturnsUnavailable ? NativeGameAccounts.Failure.unavailable : CancellationError()); pending = nil }
 }
 private func accountFrame(token: UInt64, body: Data = Data(), service: UInt64 = 254, method: UInt64? = nil, hash: UInt32? = nil, clientID: String? = nil) -> Data {
     var h = BGSWire.number(1, service) + BGSWire.number(3, token) + BGSWire.number(5, UInt64(body.count))
@@ -478,4 +479,76 @@ private func authenticatedContextReplies(logonID: String? = "synthetic-authentic
         Issue.record("Refused issuance succeeded")
     } catch ApplicationCredentialFailure.refused(let code) { #expect(code == 3025); #expect(transport.cancelled) }
     catch { Issue.record("Issuance refusal mislabeled as authentication") }
+}
+
+@Test @MainActor func applicationAuthenticationUsesFreshCredentialAndOnlyConnectsAndLogsOn() async throws {
+    let issued = "US-cccccccccccccccccccccccccccccccc-123"
+    let source = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: BGSWire.text(1, issued))]).reduce(Data(), +))
+    let target = AccountTestTransport(Array(accountReplies().prefix(3)).reduce(Data(), +))
+    try await NativeGameAccounts(transport: source).applicationAuthenticationPreflight(token: accountTestToken, build: 70938,
+        applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(source.cancelled && target.cancelled)
+    #expect(source.written.count == 3 && target.written.count == 2)
+    let packet = target.written[1], prefix = [UInt8](packet.prefix(2))
+    let length = Int(prefix[0]) * 256 + Int(prefix[1])
+    let header = try BGSWire.decode(Data(packet.dropFirst(2).prefix(length)))
+    let body = try BGSWire.decode(Data(packet.dropFirst(2 + length)))
+    #expect(try BGSWire.uint(header, 11) == 0xc02f8216)
+    #expect(try BGSWire.uint(header, 2) == 1)
+    #expect(try BGSWire.uint(body, 1) == 0x417070)
+    #expect(try BGSWire.uint(body, 4) == 17986)
+    let options = try BGSWire.decode(BGSWire.data(body, 10))
+    #expect(try BGSWire.data(options, 1) == Data(issued.utf8))
+}
+
+@Test @MainActor func applicationAuthenticationDoesNotConnectTargetWhenIssuanceFails() async {
+    let source = AccountTestTransport(Array(accountReplies(owner: 999).prefix(3)).reduce(Data(), +))
+    let target = AccountTestTransport()
+    do {
+        try await NativeGameAccounts(transport: source).applicationAuthenticationPreflight(token: accountTestToken, build: 70938,
+            applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Unverified source reached target")
+    } catch { #expect(source.cancelled); #expect(target.written.isEmpty) }
+}
+
+@Test @MainActor func applicationAuthenticationChecksTargetOwner() async {
+    let source = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: BGSWire.text(1, accountTestToken.value))]).reduce(Data(), +))
+    let target = AccountTestTransport(Array(accountReplies(owner: 999).prefix(3)).reduce(Data(), +))
+    do {
+        try await NativeGameAccounts(transport: source).applicationAuthenticationPreflight(token: accountTestToken, build: 70938,
+            applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Wrong App owner accepted")
+    } catch ApplicationAuthenticationFailure.owner { #expect(source.cancelled && target.cancelled) }
+    catch { Issue.record("Expected target owner failure") }
+}
+
+@Test @MainActor func applicationAuthenticationSeparatesTargetRefusalFromIssuance() async {
+    let source = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: BGSWire.text(1, accountTestToken.value))]).reduce(Data(), +))
+    let h = BGSWire.number(1, 254) + BGSWire.number(3, 1) + BGSWire.number(5, 0) + BGSWire.number(6, 3025)
+    let refused = Data([UInt8(h.count >> 8), UInt8(h.count & 255)]) + h
+    let target = AccountTestTransport(accountFrame(token: 0) + refused)
+    do {
+        try await NativeGameAccounts(transport: source).applicationAuthenticationPreflight(token: accountTestToken, build: 70938,
+            applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Refused App logon succeeded")
+    } catch ApplicationAuthenticationFailure.refused(let code) {
+        #expect(code == 3025); #expect(source.cancelled && target.cancelled)
+        #expect(source.written.count == 3 && target.written.count == 2)
+    } catch { Issue.record("Expected target-authentication refusal") }
+}
+
+@Test @MainActor func applicationAuthenticationCancellationClosesTargetWithoutFurtherRequests() async {
+    let source = AccountTestTransport((Array(accountReplies().prefix(3)) + [accountFrame(token: 2, body: BGSWire.text(1, accountTestToken.value))]).reduce(Data(), +))
+    let target = AccountTestTransport(accountFrame(token: 0), stall: true)
+    target.cancellationReturnsUnavailable = true // Match NWConnection's cancelled-read behavior.
+    let task = Task {
+        try await NativeGameAccounts(transport: source).applicationAuthenticationPreflight(token: accountTestToken, build: 70938,
+            applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    }
+    while target.pending == nil { await Task.yield() }
+    task.cancel()
+    do { try await task.value; Issue.record("Cancelled App logon succeeded") }
+    catch is CancellationError { #expect(source.cancelled && target.cancelled); #expect(target.pending == nil) }
+    catch { Issue.record("Cancelled target transport was mislabeled as authentication failure") }
+    #expect(source.written.count == 3 && target.written.count == 2)
 }

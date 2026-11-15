@@ -71,3 +71,15 @@ refused queries, unknown-session reporting, variant metadata and cancellation.
 Each source change received independent review before its live control. The
 probe bundle builds and passes strict ad-hoc signature verification. These are
 experimental checks, not Windows gameplay or social-feature acceptance.
+
+## Application credential issuance — version 0.0.14 (2026-11-15)
+
+User confirmed all Blizzard games closed on both Macs before the test. A single
+probe action was initiated. UI inspection timed out while it was pending; the
+button was not clicked again. The user then reported a matching-owner
+credential returned for the App request, discarded without saving. The
+completed version-14 window was subsequently observed showing the same result.
+
+This confirms issuance/owner validation for the requested App title, not actual
+target scope, application authentication, session lifecycle or friends access.
+No target logon, friends call or explicit session lifecycle RPC was sent.

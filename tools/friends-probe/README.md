@@ -391,3 +391,27 @@ Independent review found no blocking issues; the UI title was corrected to avoid
 calling issuance read-only. Explicit confirmation that Blizzard games on both
 Macs are closed is required before the live attempt; the local process check
 only detects WoW. Live result is recorded separately after testing.
+
+## Application authentication-only control (version 0.0.15)
+
+After the version-14 matching-owner issuance result, this control requests a
+fresh App credential and closes the source WoW connection. A separate native
+client then sends only Connect and Logon for title 0x417070 (App), platform Mc64,
+using the current Americas `bna` build from Blizzard's public versions service.
+The resulting logon must match the expected owner. The temporary credential is
+kept only in backend memory; both connections are closed. No social, licence,
+session creation/restoration/destruction or presence request follows. No saved
+login is replaced and there is no automatic fallback/retry/browser login.
+
+App acceptance of this title/platform/version combination is experimental.
+A refusal does not prove which parameter or permission is missing. A successful
+owner-verified login would establish acceptance of this control only, not friends
+rights, official-client parity, session coexistence or app-session lifecycle.
+Target-refusal/owner/unavailable errors are distinct from source auth/issuance.
+
+39 native/probe tests pass, including exact source3/target2 request lifetime,
+fresh credential and App build/title on wire, source owner failure before target,
+target owner rejection, target refusal stage and production-like cancellation.
+Independent review's cancellation-classification finding was fixed before live
+testing: task cancellation is checked before mapping a cancelled network read
+to an authentication failure. Live outcome recorded separately.
