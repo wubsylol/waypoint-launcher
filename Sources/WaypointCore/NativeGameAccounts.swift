@@ -320,6 +320,8 @@ public final class NativeGameAccounts {
                             let page = try PresenceDiagnosticPage.decode(reply, expectedFriend: id)
                             summary.sampledFriends += 1; summary.states += page.states
                             summary.fieldKinds.formUnion(page.fieldKinds); summary.gameTitles.formUnion(page.gameTitles)
+                            summary.onlineGameHandles += page.onlineGameHandles
+                            for (label, count) in page.selectedStatusCounts { summary.selectedStatusCounts[label, default: 0] += count }
                         } catch PresenceQueryFailure.refused(let code) {
                             presenceStatus = "Presence query refused (\(code))"
                             throw PresenceQueryFailure.refused(code)

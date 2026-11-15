@@ -259,3 +259,30 @@ validates title BN and supplies a concrete desktop key shape. The earlier sample
 mixed group1 fields13/3 and group2 fields1/8. Control5 will use only the two
 observed desktop keys and omit unique_id, preserving behavior0/session/context.
 No status semantic is inferred from those numbers alone.
+
+## Desktop account fields control5 (2026-11-15)
+
+Live success: three sampled friends, three states, BN1/13 unsigned integer and
+BN1/4 text (discarded). No game-account titles returned. Creation reply/callback,
+context match, Destroy acknowledgment and destruction callback all verified.
+No private values were shown/saved. This establishes presence read access for
+these two keys; status semantics and game/activity remain unverified.
+
+## Availability/game field evidence and control6 plan
+
+Further static tracing identifies the BN1/13 setter as SocialServicePresence::
+SetAvatarId via callback RTTI (0x114e4b6 LEA -> vtable0x2741a60); it is not status.
+Desktop AccountData parsing switch at0x826888 uses table0x829410: field21 ->
+0x828315 parses GameAccountHandle, logs SELECTED_GAME_ACCOUNT; field22 ->
+0x82840f reads unsigned selected status; field25 ->0x82859e reads selected rich
+presence string. Field20/group1 is special-cased0x8265ef...0x8265fc and parsed
+with PresenceOnlineGameAccountFieldValue constructor0x168e5b0 at0x827053 and
+variant blob parser0x143b500. Descriptor maps its repeated entries1 to game
+handle1 and online_time_us2 (time discarded). PublishAvailability0x71e3d0 uses
+bool fields7/11/12 but selected status is a separate account field22.
+
+Control6 queries BN1/20,21,22,25, behavior0, absent unique_id, three fresh friend
+IDs. Report only field types, fixed selected-status-code aggregate counts,
+validated online-handle count and allowlisted game titles. IDs, activity text,
+online timestamps and selected handles are discarded. Do not equate selected
+status preference with actual online state without online-handle evidence.

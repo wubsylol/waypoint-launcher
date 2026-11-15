@@ -1064,17 +1064,38 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
     #expect(try BGSWire.uint(original, 2) == 2)
 }
 
-@Test func presenceDesktopAccountKeysMatchStaticConstruction() throws {
+@Test func presenceDesktopAccountKeysMatchConsumedFieldsAndObservedShape() throws {
     let request = try BGSWire.decode(PresenceDiagnosticPage.desktopAccountRequest(friendID: 42))
     #expect(try BGSWire.uint(request, 2) == 0)
     let values = request[3] ?? []
-    #expect(values.count == 2)
+    #expect(values.count == 4)
     for (index, value) in values.enumerated() {
         guard case .bytes(let raw) = value else { Issue.record("Non-message key"); return }
         let key = try BGSWire.decode(raw)
         #expect(try BGSWire.uint(key, 1) == 0x424e)
         #expect(try BGSWire.uint(key, 2) == 1)
-        #expect(try BGSWire.uint(key, 3) == [4,13][index])
+        #expect(try BGSWire.uint(key, 3) == [20,21,22,25][index])
         #expect(key[4] == nil && key.count == 3)
     }
+}
+
+@Test func presenceAvailabilityDiscardsHandlesAndKeepsOnlyAggregateMetadata() throws {
+    let handle = BGSWire.number(1, 456) + BGSWire.number(2, 0x576f57) + BGSWire.number(3, 1)
+    let online = BGSWire.bytes(1, BGSWire.bytes(1, handle))
+    func entry(_ field: UInt64, _ value: Data) -> Data {
+        BGSWire.bytes(3, BGSWire.bytes(1, BGSWire.number(1, 0x424e) + BGSWire.number(2, 1) + BGSWire.number(3, field)) + BGSWire.bytes(2, value))
+    }
+    let state = BGSWire.number(1, 42) + entry(20, BGSWire.bytes(5, online)) + entry(22, BGSWire.number(6, 2))
+    let result = try PresenceDiagnosticPage.decode(BGSWire.bytes(1, state), expectedFriend: 42)
+    #expect(result.onlineGameHandles == 1 && result.gameTitles == ["World of Warcraft"])
+    #expect(result.selectedStatusCounts == ["Selected status code 2": 1])
+    let badHandle = BGSWire.number(1, 0) + BGSWire.number(2, 0x576f57) + BGSWire.number(3, 1)
+    let bad = BGSWire.number(1, 42) + entry(20, BGSWire.bytes(5, BGSWire.bytes(1, BGSWire.bytes(1, badHandle))))
+    #expect(throws: (any Error).self) { try PresenceDiagnosticPage.decode(BGSWire.bytes(1, bad), expectedFriend: 42) }
+    for oversized in [Data(repeating: 0, count: 32_769),
+        (0..<65).map { _ in BGSWire.bytes(1, BGSWire.bytes(1, handle)) }.reduce(Data(), +)] {
+        let state = BGSWire.number(1, 42) + entry(20, BGSWire.bytes(5, oversized))
+        #expect(throws: (any Error).self) { try PresenceDiagnosticPage.decode(BGSWire.bytes(1, state), expectedFriend: 42) }
+    }
+
 }

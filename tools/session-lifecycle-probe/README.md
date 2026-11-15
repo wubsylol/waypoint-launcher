@@ -119,3 +119,11 @@ messaging. Live outcome remains untested.
 Control4 refused7 with verified cleanup. Use only desktop-observed BN1/4 and
 BN1/13 keys, with absent unique_id as constructed in core17986. Same behavior0,
 three-ID cap and lifecycle. Aggregate kinds only, no semantic status claim yet.
+
+## Availability/game control6 (prepared, not run)
+
+Control5 read access succeeded but field13 is avatar ID. New statically traced
+keys20/21/22/25 cover online handles/selected game/status/rich presence. Return
+only aggregate types, counts and public game labels; text and identifiers stay
+private and are discarded. Same bounded session and fully verified cleanup.
+Selected status is not itself proof a friend is online.
