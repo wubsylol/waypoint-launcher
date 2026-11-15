@@ -20,6 +20,10 @@ enum AccountMenu {
             Task { await model.addAccount() }
         })
         if let active = model.activeAccount {
+            items.append(ActionItem("Choose Portrait…", enabled: enabled) {
+                PortraitPicker.show(model: model, account: active)
+            })
+            items.append(.separator())
             let refresh = ActionItem("Refresh BattleTag", enabled: enabled) { Task { await model.refreshBattleTag() } }
             refresh.toolTip = "Americas accounts. Close WoW on all devices first. Uses the saved login without another sign-in."
             items.append(refresh)
@@ -74,8 +78,9 @@ extension AccountTint {
 extension NSImage {
     /// The account's avatar: a person on a circle in its tint, so accounts
     /// tell apart at a glance. Signed out, the plain outline.
-    static func account(_ account: Account?) -> NSImage? {
+    @MainActor static func account(_ account: Account?) -> NSImage? {
         guard let account else { return .symbol("person.crop.circle") }
+        if let id = account.portraitID, let portrait = PortraitImages.shared.image(id: id) { return portrait }
         let colors = NSImage.SymbolConfiguration(paletteColors: [.white, account.tint.color])
         return .symbol("person.crop.circle.fill")?.withSymbolConfiguration(colors)
     }

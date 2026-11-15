@@ -1216,6 +1216,11 @@ final class AppModel {
 
     /// Makes another saved account the one games launch with. Nothing is
     /// fetched: its own web session and tokens are already here.
+    func setPortrait(_ portraitID: String?, for accountID: String) {
+        guard portraitID == nil || AccountPortrait.choices.contains(where: { $0.id == portraitID }) else { return }
+        accountList.setPortrait(portraitID, for: accountID)
+    }
+
     func switchAccount(to id: String) {
         guard !isSigningIn, id != accountList.activeID else { return }
         accountList.activate(id)
