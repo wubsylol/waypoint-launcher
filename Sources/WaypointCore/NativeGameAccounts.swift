@@ -214,6 +214,26 @@ public final class NativeGameAccounts {
         }
     }
 
+    /// Existing-session query under App authentication, not session creation.
+    public func applicationSessionPreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64, region: Region) async throws -> NativeSessionDiagnostics {
+        try await applicationSessionPreflight(token: token, build: build, applicationBuild: applicationBuild,
+            region: region, applicationClient: NativeGameAccounts())
+    }
+
+    func applicationSessionPreflight(token: LoginToken, build: UInt64, applicationBuild: UInt64,
+                                    region: Region, applicationClient: NativeGameAccounts) async throws -> NativeSessionDiagnostics {
+        guard applicationBuild > 0 else { throw ApplicationAuthenticationFailure.unavailable }
+        let candidate = try await issueApplicationCredential(token: token, build: build, region: region)
+        try Task.checkCancellation()
+        do {
+            return try await applicationClient.sessionDiagnostics(token: candidate, build: applicationBuild, region: region,
+                includeConnectionIdentity: false, useAuthenticatedClientID: true, titleID: 0x417070)
+        } catch {
+            try Task.checkCancellation()
+            throw error
+        }
+    }
+
     public func discover(token: LoginToken, build: UInt64, region: Region) async throws -> [GameAccount] {
         try await authenticated(token: token, build: build, region: region) {
             let owner = expectedOwner
@@ -305,12 +325,20 @@ public final class NativeGameAccounts {
     /// Read-only connection metadata plus GetSessionState. Sends no session
     /// creation, restoration, destruction or mark-alive request.
     public func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region, includeConnectionIdentity: Bool = false, useAuthenticatedClientID: Bool = false) async throws -> NativeSessionDiagnostics {
+        try await sessionDiagnostics(token: token, build: build, region: region,
+            includeConnectionIdentity: includeConnectionIdentity, useAuthenticatedClientID: useAuthenticatedClientID,
+            titleID: 0x576f57)
+    }
+
+    private func sessionDiagnostics(token: LoginToken, build: UInt64, region: Region,
+                                    includeConnectionIdentity: Bool, useAuthenticatedClientID: Bool,
+                                    titleID: UInt64) async throws -> NativeSessionDiagnostics {
         guard !(includeConnectionIdentity && useAuthenticatedClientID) else { throw Failure.unsupported }
         recordsDiagnostics = true
         includesConnectionIdentity = includeConnectionIdentity
         if useAuthenticatedClientID { inspectsAuthenticationContext = true; usesAuthenticatedClientID = true }
         do {
-            return try await authenticated(token: token, build: build, region: region) {
+            return try await authenticated(token: token, build: build, region: region, titleID: titleID) {
                 do {
                     diagnosticStage = .query
                     let reply = try await call(hash: 0x7b37d770, method: 5, replyKind: .sessionDiagnostic)

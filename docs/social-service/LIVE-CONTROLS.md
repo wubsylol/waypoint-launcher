@@ -163,3 +163,17 @@ The key schema also defines optional unique_id4. The first probe omitted it;
 public client update examples include explicit zero. The next isolated control
 adds only unique_id=0 to the same keys, keeping other request fields and auth
 unchanged. No claim is made that optional protobuf presence is server-required.
+
+## Explicit-zero presence key control2 (2026-11-15)
+
+User again reported successful application login/friends lookup followed by
+presence status7. Encoding unique_id=0 explicitly did not resolve the refusal.
+No fields/status/game activity were returned. The report does not isolate the
+failing validation or establish a need for session creation.
+
+Next read-only control: GetSessionState under App authentication, using the
+fresh same-owner App credential and the App logon callback client context.
+Earlier existing-session status7 controls were authenticated as WoW. Since App
+authentication changed friends-service access, repeating this distinct session
+query under the working App identity is useful before considering any lifecycle
+mutation. No Create/Restore/DestroySession call is implemented by this control.

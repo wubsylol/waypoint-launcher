@@ -746,3 +746,36 @@ private func presencePage(friend: UInt64, title: UInt64 = 0x576f57) -> Data {
         #expect(try BGSWire.uint(new, 4) == 0)
     }
 }
+
+@Test @MainActor func applicationSessionPreflightQueriesAppContextOnlyAndKeepsRefusalUnknown() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let header = BGSWire.number(1, 254) + BGSWire.number(3, 2) + BGSWire.number(5, 0) + BGSWire.number(6, 7)
+    let refusal = Data([UInt8(header.count >> 8), UInt8(header.count & 255)]) + header
+    let target = AccountTestTransport(Array(authenticatedContextReplies().prefix(3)).reduce(Data(), +) + refusal)
+    let report = try await NativeGameAccounts(transport: source).applicationSessionPreflight(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(report.sessionQueryStatus == 7 && report.serverSessionIDPresent == nil)
+    #expect(source.cancelled && target.cancelled)
+    #expect(source.written.count == 3 && target.written.count == 3)
+    let auth = target.written[1], authLength = Int(auth[0]) * 256 + Int(auth[1])
+    let body = try BGSWire.decode(Data(auth.dropFirst(2 + authLength)))
+    #expect(try BGSWire.uint(body, 1) == 0x417070)
+    let query = target.written[2], queryLength = Int(query[0]) * 256 + Int(query[1])
+    let h = try BGSWire.decode(Data(query.dropFirst(2).prefix(queryLength)))
+    #expect(try BGSWire.uint(h, 11) == 0x7b37d770)
+    #expect(try BGSWire.uint(h, 2) == 5)
+    #expect(try BGSWire.data(h, 13) == Data("synthetic-authenticated-id".utf8))
+    #expect(query.dropFirst(2 + queryLength).isEmpty)
+}
+
+@Test @MainActor func applicationSessionPreflightRejectsAnotherOwnersReturnedSession() async {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let state = BGSWire.bytes(1, BGSWire.bytes(1, BGSWire.number(1, 999)))
+    let target = AccountTestTransport(Array(authenticatedContextReplies().prefix(3)).reduce(Data(), +) + accountFrame(token: 2, body: state))
+    do {
+        _ = try await NativeGameAccounts(transport: source).applicationSessionPreflight(token: accountTestToken,
+            build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+        Issue.record("Another owner's session was accepted")
+    } catch NativeGameAccounts.Failure.owner { #expect(source.cancelled && target.cancelled) }
+    catch { Issue.record("Expected session-owner validation failure") }
+}

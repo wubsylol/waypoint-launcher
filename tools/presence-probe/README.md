@@ -1,4 +1,7 @@
-# Bounded presence schema probe
+# Presence/session investigation probes
+
+Current UI: Existing App-session control3. Earlier presence query controls below
+are historical; see the final section for the current request scope.
 
 Experimental social branch only; not part of live Waypoint. Build with
 `tools/presence-probe/build.sh`. No request occurs until Check presence fields.
@@ -74,3 +77,18 @@ since_us, session setup or alternative endpoint is added.49 targeted checks
 pass, including an old/new request parity fixture. Status7 remains compatible
 with multiple causes; do not infer permission denial, offline state or a need
 for a new session from it. Live outcome pending.
+
+## Existing App-session control3
+
+Explicit-zero control2 also returned7. Current UI now performs a distinct,
+read-only existing-session query under fresh owner-verified App authentication.
+It sends source Connect/WoW Logon/GenerateAuthToken, closes source, then target
+Connect/App Logon/GetSessionState5 with the verified target context. No friends
+or presence query is sent, and no session lifecycle mutation is added. The
+original public sessionDiagnostics route remains WoW-authenticated by default.
+
+Only query status and owner-verified session-identity presence are reported.
+Refusal leaves presence unknown, never “no session exists.” A returned identity
+must match the authenticated owner.51 targeted tests pass, including the exact
+App-control dispatch, empty query body, client-context source, refusal semantics
+and wrong-owner response. Live outcome pending.

@@ -13,13 +13,13 @@ import WaypointCore
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 500),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Presence — Explicit-zero Key Check 2"
+        window.title = "Waypoint Presence — Application Session Check 3"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        let title = NSTextField(labelWithString: "Presence fields — explicit-zero key control")
+        let title = NSTextField(labelWithString: "Application session — existing-state check")
         title.font = .systemFont(ofSize: 18, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Close Blizzard games on both Macs first. Uses temporary application authentication, reads friend IDs without names, then queries the same fixed fields for at most three friends, with unique_id explicitly set to zero. No subscriptions, presence updates, messages or explicit session lifecycle calls. Displays only declared field kinds and recognised game titles, never friend IDs, names or activity text. Status-field meanings remain unverified; missing data will not be labelled Offline.")
-        button = NSButton(title: "Check presence fields", target: self, action: #selector(check))
+        let explanation = NSTextField(wrappingLabelWithString: "Close Blizzard games on both Macs first. Uses a temporary App credential and owner-verified application login, then queries existing session state with the authenticated client context. No friends/presence lookup, subscriptions, messages, presence updates or Create/Restore/DestroySession requests. Shows only query status and whether an owner-verified session identity was returned. A refusal leaves session existence unknown.")
+        button = NSButton(title: "Inspect existing App session", target: self, action: #selector(check))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel))
         let actions = NSStackView(views: [button, cancel, NSView()])
         actions.spacing = 12
@@ -64,7 +64,7 @@ import WaypointCore
               let token = TokenVault(service: "io.wubs.waypoint-review: Battle.net login tokens").token(account: account.id, codename: "WoW"),
               token.accountID == account.id else { status.stringValue = "No matching saved WoW login. No connection made."; return }
         button.isEnabled = false
-        status.stringValue = "Checking public build metadata, then reading a bounded presence sample…"
+        status.stringValue = "Checking public build metadata, then querying existing App session state…"
         task = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -86,26 +86,22 @@ import WaypointCore
                       game.buildID > 0, app.buildID > 0, game.region == "us", app.region == "us" else {
                     self.status.stringValue = "Account/game state or metadata changed. No connection made."; return
                 }
-                let report = try await NativeGameAccounts().applicationPresencePreflight(token: token,
+                let report = try await NativeGameAccounts().applicationSessionPreflight(token: token,
                     build: UInt64(game.buildID), applicationBuild: UInt64(app.buildID), region: .us)
                 try Task.checkCancellation()
                 guard AccountList.load(from: self.defaults).activeID == account.id else {
                     self.status.stringValue = "Account changed; result discarded."; return
                 }
-                let titles = report.gameTitles.sorted().joined(separator: ", ")
-                self.output.string = "Friends sampled: \(report.sampledFriends)\nPresence states returned: \(report.states)\nGame-account titles in returned states: \(titles.isEmpty ? "none reported" : titles)\n\nDeclared Variant fields present:\n"
-                    + (report.fieldKinds.isEmpty ? "No allowlisted field values returned." : report.fieldKinds.sorted().joined(separator: "\n"))
-                    + "\n\nThis does not yet establish online/offline or current-game semantics."
-                self.status.stringValue = "Presence schema check complete. Both connections closed; saved login unchanged."
+                let present = report.serverSessionIDPresent.map { $0 ? "yes" : "no" } ?? "unknown"
+                self.output.string = "Existing App-session query status: \(report.sessionQueryStatus)\nOwner-verified session identity returned: \(present)\n\nNo session creation, restoration or destruction requested."
+                self.status.stringValue = "App session-state check complete. Both connections closed; saved login unchanged."
             } catch is CancellationError { self.status.stringValue = "Cancelled. Saved login unchanged." }
-            catch PresenceQueryFailure.refused(let code) { self.status.stringValue = "Application login and friends lookup succeeded; presence query refused (\(code)). Saved login unchanged." }
-            catch PresenceQueryFailure.identity { self.status.stringValue = "Presence reply identity mismatch. Result discarded." }
-            catch PresenceQueryFailure.malformed { self.status.stringValue = "Presence response exceeded supported schema bounds. Result discarded." }
-            catch FriendSnapshotFailure.requestRejected(let code) { self.status.stringValue = "Friends lookup refused (\(code)); no presence request sent." }
+            catch let failure as SessionDiagnosticFailure { self.status.stringValue = failure.localizedDescription + " Saved login unchanged." }
             catch ApplicationCredentialFailure.refused(let code) { self.status.stringValue = "Application credential request refused (\(code)). Saved login unchanged." }
-            catch ApplicationAuthenticationFailure.refused(let code) { self.status.stringValue = "Application authentication refused (\(code)). Saved login unchanged." }
-            catch AuthenticationContextFailure.missingClientID { self.status.stringValue = "No authenticated client context; no presence query sent." }
-            catch { self.status.stringValue = "Presence check could not complete. Saved login unchanged." }
+            catch AuthenticationContextFailure.missingClientID { self.status.stringValue = "No authenticated client context; no session-state query sent." }
+            catch NativeGameAccounts.Failure.rejected(let code) { self.status.stringValue = "Authentication refused (\(code)); session-state check not completed. Saved login unchanged." }
+            catch NativeGameAccounts.Failure.owner { self.status.stringValue = "Account/session owner mismatch. Result discarded; saved login unchanged." }
+            catch { self.status.stringValue = "App session-state check could not complete. Saved login unchanged." }
         }
     }
 
