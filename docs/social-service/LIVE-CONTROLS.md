@@ -215,3 +215,17 @@ notification. Therefore callback absence is inconclusive, rather than evidence o
 server cleanup failure. The acknowledged request is verified; a matching destruction
 event and final server-side state are not. Do not reconnect or blindly retry cleanup.
 No presence query or message was made. Mainline remains unchanged.
+
+## App session lifecycle observation control2 (2026-11-15)
+
+Following fresh explicit consent and closed-client confirmation on both Macs,
+the second probe ran once. The UI reported creation response owner/binding
+verified, creation callback verified, instance matching authentication context,
+Destroy request accepted, and matching destruction callback observed. No refusal
+code was reported. Both connections closed and saved login remained unchanged.
+
+This verifies the bounded create/acknowledge/destroy/notification cycle for this
+account and connection context. It does not establish other-client coexistence,
+presence authorization or messaging. No friends/presence request or message was
+sent. Next investigation may evaluate presence within the verified session, with
+the same identity checks and cleanup behavior, before a separately approved test.
