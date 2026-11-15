@@ -229,3 +229,20 @@ account and connection context. It does not establish other-client coexistence,
 presence authorization or messaging. No friends/presence request or message was
 sent. Next investigation may evaluate presence within the verified session, with
 the same identity checks and cleanup behavior, before a separately approved test.
+
+## Presence-in-session control3 (2026-11-15)
+
+Live single attempt: verified creation response/callback and matching context;
+fresh friends lookup succeeded, presence Query5 refused3. Destroy acknowledged
+and matching destruction callback verified. No sample returned or data persisted.
+This differs from pre-session7 but does not prove the reason or an access grant.
+
+Static desktop core17986 inspection identifies QueryImpl at0x71a980 using
+QueryRequest constructor0x1689b50. For account entities it explicitly sets
+query_behavior2 to numeric0 at0x71a9d9/0x71a9e0, sets account_id1 at0x71a9f2/
+0x71a9f9, copies provided keys, and uses SDK identity getter0x739e70 at0x71ac5c.
+RTTI QueryRequest at0x23cf8d6 -> typeinfo0x278adf8 -> vtable0x278abc8,
+destructor0x168b4e0, validates the constructor/copy/destructor family. Our
+previous sample used behavior2 INCLUDE_ALL_GAME_ACCOUNTS. Next controlled test
+uses the desktop account-only behavior0, keeping session/header/keys unchanged.
+This is a bounded format alignment, not an attempt to override server refusal.

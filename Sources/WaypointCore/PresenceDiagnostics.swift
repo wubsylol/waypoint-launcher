@@ -19,8 +19,8 @@ enum PresenceDiagnosticPage {
         (0x424e, 1, 13), (0x424e, 1, 3), (0x424e, 2, 1), (0x424e, 2, 8)
     ]
 
-    static func request(friendID: UInt64) -> Data {
-        var body = BGSWire.number(1, friendID) + BGSWire.number(2, 2) // INCLUDE_ALL_GAME_ACCOUNTS
+    static func request(friendID: UInt64, accountOnly: Bool = false) -> Data {
+        var body = BGSWire.number(1, friendID) + BGSWire.number(2, accountOnly ? 0 : 2) // Desktop account QueryImpl uses 0.
         for (title, group, field) in keys {
             body += BGSWire.bytes(3, BGSWire.number(1, title) + BGSWire.number(2, group)
                 + BGSWire.number(3, field) + BGSWire.number(4, 0))

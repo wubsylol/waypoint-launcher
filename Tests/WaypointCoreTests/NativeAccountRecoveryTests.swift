@@ -1054,3 +1054,12 @@ private func appLifecycleNotification(_ method: UInt64, identity: Data = appLife
         #expect(target.cancelled && target.written.count == 5)
     }
 }
+
+@Test func presenceDesktopAccountOnlyKeepsAllowlistedKeys() throws {
+    let request = try BGSWire.decode(PresenceDiagnosticPage.request(friendID: 42, accountOnly: true))
+    #expect(try BGSWire.uint(request, 1) == 42)
+    #expect(try BGSWire.uint(request, 2) == 0)
+    #expect(request[3]?.count == 4)
+    let original = try BGSWire.decode(PresenceDiagnosticPage.request(friendID: 42))
+    #expect(try BGSWire.uint(original, 2) == 2)
+}

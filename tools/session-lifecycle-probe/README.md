@@ -104,3 +104,12 @@ cleanup status and triggers same-context cleanup without presence retry.
 66 targeted tests pass, including capped sampling and refusal followed by verified
 cleanup, plus wrong-friend/malformed presence responses stopping all requests. User authorized continued presence testing on 2026-11-15; keep clients
 closed, stop on unconfirmed cleanup, and do not expand into messaging yet.
+
+## Account-only control4 (prepared, not run)
+
+Control3 refused presence3 with verified cleanup. Align only query_behavior with
+current desktop account QueryImpl: numeric0 BATTLE_NET_ACCOUNT_ONLY, instead of2.
+The original pre-session probe retains behavior2. Same keys, authenticated header,
+friend cap and verified lifecycle. See LIVE-CONTROLS for static address evidence.
+67 targeted tests pass. No expansion into subscription, status publication or
+messaging. Live outcome remains untested.

@@ -316,7 +316,7 @@ public final class NativeGameAccounts {
                               let id = UInt64(friend.id), id > 0 else { throw ApplicationSessionTestFailure.identity }
                         do {
                             let reply = try await applicationClient.call(hash: 0x138d200c, method: 5,
-                                body: PresenceDiagnosticPage.request(friendID: id), replyKind: .presenceQuery)
+                                body: PresenceDiagnosticPage.request(friendID: id, accountOnly: true), replyKind: .presenceQuery)
                             let page = try PresenceDiagnosticPage.decode(reply, expectedFriend: id)
                             summary.sampledFriends += 1; summary.states += page.states
                             summary.fieldKinds.formUnion(page.fieldKinds); summary.gameTitles.formUnion(page.gameTitles)
