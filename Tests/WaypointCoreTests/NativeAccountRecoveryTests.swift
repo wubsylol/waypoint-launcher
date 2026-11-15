@@ -152,6 +152,10 @@ private func friendPage(_ id: UInt64, tag: String, continuation: UInt64? = nil) 
     let normal = try FriendSnapshotPage.decode(friendPage(42, tag: "Friend#1234"))
     #expect(normal.friends.first?.battleTag == "Friend#1234")
     #expect(normal.friends.first?.id == "42")
+    let privateFields = BGSWire.number(1, 42) + BGSWire.text(3, "Friend#1234")
+        + BGSWire.text(4, "Synthetic private real name") + BGSWire.bytes(5, BGSWire.text(1, "Synthetic private note"))
+    let rich = try FriendSnapshotPage.decode(BGSWire.bytes(1, privateFields))
+    #expect(rich.friends == normal.friends) // fetch_names must not expose Real ID/name attributes.
     let missing = try FriendSnapshotPage.decode(BGSWire.bytes(1, BGSWire.number(1, 42)))
     #expect(missing.friends.first?.displayName == "Friend 42")
     for bytes in [BGSWire.number(1, 0), BGSWire.number(1, 42) + BGSWire.text(3, "bad\nname"), BGSWire.number(1, 42) + BGSWire.text(3, String(repeating: "x", count: 257))] {
@@ -577,7 +581,10 @@ private func applicationIssuanceReplies() -> Data {
     #expect(try BGSWire.uint(header, 11) == 0x5869be8c)
     #expect(try BGSWire.uint(header, 2) == 5)
     #expect(try BGSWire.data(header, 13) == Data("synthetic-authenticated-id".utf8))
-    #expect(packet.dropFirst(2 + length).isEmpty)
+    let request = try BGSWire.decode(Data(packet.dropFirst(2 + length)))
+    let nameOptions = try BGSWire.decode(BGSWire.data(request, 1))
+    #expect(try BGSWire.uint(nameOptions, 1) == 1)
+    #expect(request.count == 1)
 }
 
 @Test @MainActor func applicationFriendsMissingContextStopsBeforeSocialRequest() async {
@@ -605,4 +612,25 @@ private func applicationIssuanceReplies() -> Data {
     catch { Issue.record("Social refusal mislabeled as authentication failure") }
     #expect(source.cancelled && target.cancelled)
     #expect(target.written.count == 3)
+}
+
+@Test @MainActor func applicationFriendsRequestsNamesOnEveryContinuationPage() async throws {
+    let source = AccountTestTransport(applicationIssuanceReplies())
+    let logon = Array(authenticatedContextReplies().prefix(3))
+    let first = accountFrame(token: 2, body: friendPage(42, tag: "Synthetic#1234", continuation: 9))
+    let second = accountFrame(token: 3, body: friendPage(43, tag: "Other#5678") + BGSWire.text(88, "discarded"))
+    let target = AccountTestTransport((logon + [first, second]).reduce(Data(), +))
+    let result = try await NativeGameAccounts(transport: source).applicationFriendsPreflight(token: accountTestToken,
+        build: 70938, applicationBuild: 17986, region: .us, applicationClient: NativeGameAccounts(transport: target))
+    #expect(result.count == 2)
+    #expect(result.allSatisfy { $0.battleTag != nil })
+    #expect(target.written.count == 4 && target.cancelled && source.cancelled)
+    for (index, packet) in target.written.dropFirst(2).enumerated() {
+        let length = Int(packet[0]) * 256 + Int(packet[1])
+        let body = try BGSWire.decode(Data(packet.dropFirst(2 + length)))
+        let options = try BGSWire.decode(BGSWire.data(body, 1))
+        #expect(try BGSWire.uint(options, 1) == 1)
+        if index == 1 { #expect(try BGSWire.uint(body, 2) == 9) }
+        else { #expect(body[2] == nil) }
+    }
 }

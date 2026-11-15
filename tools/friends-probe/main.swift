@@ -20,11 +20,11 @@ import WaypointCore
     private let defaults = UserDefaults(suiteName: "io.wubs.waypoint-review")!
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 520), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Waypoint Friends — Local Friends Viewer 17"
+        window.title = "Waypoint Friends — Local Friends Viewer 18"
         window.isReleasedWhenClosed = false; window.delegate = self
         let title = NSTextField(labelWithString: "Battle.net friends — local viewer")
         title.font = .systemFont(ofSize: 20, weight: .semibold)
-        let explanation = NSTextField(wrappingLabelWithString: "Requests a temporary App credential using the saved WoW login, closes the source connection, authenticates as App, then makes one bounded friends lookup using the owner-verified application context. Close Blizzard games on both Macs first. No explicit session creation/destruction, subscription, messages, presence updates or saved-login writes. Names stay hidden until you choose Show Friends. Only BattleTags are shown locally; no real names or IDs are displayed or saved. This is a snapshot, not live presence or messaging.")
+        let explanation = NSTextField(wrappingLabelWithString: "Requests a temporary App credential using the saved WoW login, closes the source connection, authenticates as App, then makes one bounded friends lookup using the owner-verified application context. Close Blizzard games on both Macs first. Requests BattleTags explicitly. No explicit session creation/destruction, subscription, messages, presence updates or saved-login writes. Names stay hidden until you choose Show Friends. Only BattleTags are shown locally; no real names or IDs are displayed or saved. This is a snapshot, not live presence or messaging.")
         button = NSButton(title: "Refresh Friends", target: self, action: #selector(readFriends))
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelRead))
         revealButton = NSButton(title: "Show Friends", target: self, action: #selector(toggleNames))

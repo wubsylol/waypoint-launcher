@@ -120,3 +120,14 @@ can validate expected friends without exporting a list. Then investigate
 presence/ongoing refresh independently. Keep all social work off personal main
 until explicitly promoted. Messaging, read/typing signals and friendship
 mutations remain outside this read experiment.
+
+## Local viewer — version 0.0.17 (2026-11-15)
+
+User reported all entries displayed BattleTag unavailable. No actual friends
+list or identifiers were inspected. This establishes that the current UI had
+no usable BattleTag strings, not whether response field3 was absent or empty.
+
+Offline schema review found GetFriendsRequest.options1 contains
+GetFriendsOptions.fetch_names1 (bool). Previous controls omitted options and
+therefore did not explicitly request names. This is a concrete missing request
+field and the next controlled change; it is not yet a demonstrated live fix.

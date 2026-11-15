@@ -153,7 +153,7 @@ public final class NativeGameAccounts {
         try Task.checkCancellation()
         do {
             return try await applicationClient.friends(token: candidate, build: applicationBuild, region: region,
-                protocolVersion: .authenticatedContext, includeConnectionIdentity: false, titleID: 0x417070)
+                protocolVersion: .authenticatedContext, includeConnectionIdentity: false, titleID: 0x417070, fetchNames: true)
         } catch {
             try Task.checkCancellation()
             switch error {
@@ -206,7 +206,7 @@ public final class NativeGameAccounts {
     }
 
     private func friends(token: LoginToken, build: UInt64, region: Region, protocolVersion: FriendSnapshotProtocol,
-                         includeConnectionIdentity: Bool, titleID: UInt64) async throws -> [BattleNetFriend] {
+                         includeConnectionIdentity: Bool, titleID: UInt64, fetchNames: Bool = false) async throws -> [BattleNetFriend] {
         if protocolVersion == .authenticatedContext {
             guard !includeConnectionIdentity else { throw Failure.unsupported }
             recordsDiagnostics = true
@@ -230,7 +230,9 @@ public final class NativeGameAccounts {
             var result: [BattleNetFriend] = [], seenIDs = Set<String>(), continuations = Set<UInt64>()
             var continuation: UInt64 = 0
             for _ in 0..<20 {
-                let request = continuation == 0 ? Data() : W.number(2, continuation)
+                // GetFriendsOptions.fetch_names is false/omitted in the ID-only control.
+                var request = fetchNames ? W.bytes(1, W.number(1, 1)) : Data()
+                if continuation != 0 { request += W.number(2, continuation) }
                 // Explicit control: only the method's client-call bit changes.
                 let method: UInt64 = protocolVersion == .currentClientCall ? 0x40000005 : 5
                 let response = try await call(hash: 0x5869be8c, method: method, body: request, replyKind: .friends)

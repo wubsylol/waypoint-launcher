@@ -1,7 +1,8 @@
 # Battle.net friends experiment
 
-Current mode: version0.0.17, opt-in local BattleTag viewer. Refresh Friends
-uses the working version16 backend. Names remain hidden until Show Friends;
+Current mode: version0.0.18, opt-in local BattleTag viewer. Refresh Friends
+uses the version16 backend with the schema’s fetch_names option enabled.
+Names remain hidden until Show Friends;
 no list is exported or saved. The previous count-only live result returned45
 records. Name correctness/completeness remains user-verified only; presence and
 messaging are untested. Older modes below are historical. Temporary credential
@@ -463,3 +464,18 @@ can confirm names/completeness locally without including a friends list in a
 transcript. Ask only whether the expected friends appear and whether any
 BattleTag placeholders remain. The existing42 backend checks remain the latest
 network/parser tests; this UI-only change is built and independently reviewed.
+
+## Explicit names option (version 0.0.18)
+
+User's version17 result: all entries showed BattleTag unavailable. Saved client
+metadata defines GetFriendsRequest.options1 -> GetFriendsOptions.fetch_names1
+(bool). Version18 enables that option on every application-context lookup page.
+All other App credential/auth/context routing, bounds and cleanup are unchanged.
+The public WoW/default control continues to omit the option.
+
+This is a general names option; a server may return full_name too. Only friend
+ID and BattleTag reach the core result; full_name4 and attributes5 are discarded.
+The opt-in local viewer still retains only BattleTag/numbered placeholder strings,
+with no names/IDs exported or logged.43 targeted tests pass, including options
+on initial/continuation pages and a synthetic private-real-name/attribute fixture
+that is discarded. Independent review found no blockers. Live fix unverified.
